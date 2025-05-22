@@ -341,7 +341,7 @@ contract Game {
         if (numPlayersJoined == NUM_PLAYERS) {
             gameStarted = true;
             gameStartTime = block.timestamp; // Set game start time
-            padlocks = 2;
+            padlocks = 1;
             seals = 1;
             // Initialize all players' move cooldowns to 0 (can be used immediately)
             for (uint8 i = 0; i < NUM_PLAYERS; i++) {

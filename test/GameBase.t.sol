@@ -8,19 +8,19 @@ contract GameBaseTest is Test {
     Game game;
     address[] players;
 
-    // Set up test addresses
-    address player1 = address(0x1);
-    address player2 = address(0x2);
-    address player3 = address(0x3);
-    address player4 = address(0x4);
-    address player5 = address(0x5);
-    address player6 = address(0x6);
-    address player7 = address(0x7);
-    address player8 = address(0x8);
-    address player9 = address(0x9);
-    address player10 = address(0x10);
-    address player11 = address(0x11);
-    address player12 = address(0x12);
+    // Set up test addresses using vm.addr instead of precompiled addresses
+    address player1 = vm.addr(1);
+    address player2 = vm.addr(2);
+    address player3 = vm.addr(3);
+    address player4 = vm.addr(4);
+    address player5 = vm.addr(5);
+    address player6 = vm.addr(6);
+    address player7 = vm.addr(7);
+    address player8 = vm.addr(8);
+    address player9 = vm.addr(9);
+    address player10 = vm.addr(10);
+    address player11 = vm.addr(11);
+    address player12 = vm.addr(12);
 
     uint256 constant ENTRY_FEE = 0.01 ether;
 
