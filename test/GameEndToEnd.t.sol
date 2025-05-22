@@ -28,6 +28,7 @@ contract GameEndToEndTest is GameBaseTest {
     function testEndToEndGameplayVictory() public {
         // Record initial balances
         uint256 initialInnocentBalance = address(innocentPlayer).balance;
+        uint256 initialWizardBalance = address(wizardPlayer).balance;
 
         // Initial state checks
         assertTrue(game.gameStarted());
@@ -84,31 +85,46 @@ contract GameEndToEndTest is GameBaseTest {
         // Game should be over now
         assertTrue(game.gameOver());
 
-        // Check that there's a winner
+        // Check that Innocent and Wizard are the winners
         uint256 winnerCount = 0;
         bool innocentIsWinner = false;
+        bool wizardIsWinner = false;
 
-        // We need to count the winners and check if innocent is among them
+        // We need to count the winners and check if Innocent and Wizard are among them
         for (uint i = 0; i < game.NUM_PLAYERS(); i++) {
             try game.winners(i) returns (address winner) {
                 winnerCount++;
                 if (winner == innocentPlayer) {
                     innocentIsWinner = true;
                 }
+                if (winner == wizardPlayer) {
+                    wizardIsWinner = true;
+                }
             } catch {
                 break;
             }
         }
 
-        // Verify Innocent is a winner and received prize money
-        assertTrue(winnerCount > 0, "There should be at least one winner");
+        // Verify Innocent and Wizard are the only winners
+        assertEq(winnerCount, 2, "There should be exactly two winners");
         assertTrue(innocentIsWinner, "Innocent should be a winner");
+        assertTrue(wizardIsWinner, "Wizard should be a winner");
 
-        // Check that Innocent's balance increased
+        // Check that Innocent and Wizard each received half of the prize money
         uint256 finalInnocentBalance = address(innocentPlayer).balance;
+        uint256 finalWizardBalance = address(wizardPlayer).balance;
+
+        uint256 innocentPrize = finalInnocentBalance - initialInnocentBalance;
+        uint256 wizardPrize = finalWizardBalance - initialWizardBalance;
+
+        assertEq(
+            innocentPrize,
+            wizardPrize,
+            "Innocent and Wizard should receive equal prize money"
+        );
         assertTrue(
-            finalInnocentBalance > initialInnocentBalance,
-            "Innocent should have received prize money"
+            innocentPrize > 0,
+            "Prize money should be greater than zero"
         );
     }
 }

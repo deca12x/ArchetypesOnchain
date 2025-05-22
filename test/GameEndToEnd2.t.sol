@@ -102,5 +102,14 @@ contract GameEndToEnd2Test is GameBaseTest {
             finalSageBalance > initialSageBalance,
             "Sage should have received prize money"
         );
+
+        // Check that Sage received all the prize money
+        uint256 expectedPrize = address(game).balance +
+            (finalSageBalance - initialSageBalance);
+        assertEq(
+            finalSageBalance - initialSageBalance,
+            expectedPrize,
+            "Sage should have received all the prize money"
+        );
     }
 }
