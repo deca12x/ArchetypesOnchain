@@ -1,66 +1,35 @@
-## Foundry
+# Archetypes: On-Chain Game Mechanics
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+Smart contracts powering **Archetypes of the Collective Unconscious** - a multiplayer strategy RPG on Mantle Network where players embody archetypes competing for crypto rewards.
 
-Foundry consists of:
+## Overview
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- **Game.sol**: Core contract managing 12 unique character archetypes, each with special abilities
+- **Mechanics**: Padlocks, magical seals, keys, alliances, and 24 distinct moves
+- **Economy**: Entry fee of 0.01 MNT with prize pool distribution to winners
 
-## Documentation
+## Character Types
 
-https://book.getfoundry.sh/
+| Openers  | Blockers   | Double Agents |
+| -------- | ---------- | ------------- |
+| Hero     | Ruler      | Wizard        |
+| Explorer | Caregiver  | Outlaw        |
+| Innocent | Common Man | Lover         |
+| Artist   | Joker      | Sage          |
 
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
+## Development
 
 ```shell
-$ forge test
+# Build
+forge build
+
+# Test
+forge test
+
+# Deploy
+forge script script/Deploy.s.sol --rpc-url <rpc_url> --private-key <key>
 ```
 
-### Format
+## Frontend
 
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+Integrates with [Archetypes frontend](https://github.com/deca12x/Archetypes)
