@@ -73,6 +73,7 @@ contract Game {
     bool public gameOver;
     address[] public winners;
     uint256 public totalPrizePool;
+    uint256 public gameStartTime;
 
     // Chest State
     uint8 public padlocks;
@@ -84,10 +85,7 @@ contract Game {
     uint256 public royalDecreeEndTime;
 
     // For Copycat move
-    MoveType private _lastEligibleMoveForCopycat; // UnlockChest or UnsealChest
-    bool private _lastCopiedMoveUsedEnchantedKey;
-
-    bool private _anyKeyHasBeenForged; // For Artist's Enchanted Key
+    MoveType private _lastMoveExecuted; // Tracks any move type
 
     // Alliance / Binding (Disjoint Set Union - DSU)
     mapping(address => address) public dsuParent;
@@ -99,9 +97,6 @@ contract Game {
     // Add new mapping for character-move relationships
     mapping(CharacterType => mapping(MoveType => bool))
         public characterCanUseMove;
-
-    // Add this with other state variables
-    uint256 public gameStartTime;
 
     // Events
     event GameCreated(
@@ -363,14 +358,17 @@ contract Game {
     }
 
     // --- DSU (Alliance) Helper Functions ---
-    function _find(address _player) internal view returns (address) {
+    function _find(address _player) internal returns (address) {
         if (dsuParent[_player] == _player) {
             return _player;
         }
-        // Path compression not implemented for view simplicity, can be added if gas is an issue for write ops.
-        // For write operations, path compression should be used:
-        // dsuParent[_player] = _find(dsuParent[_player]);
-        // return dsuParent[_player];
+        // Implement path compression for efficiency
+        dsuParent[_player] = _find(dsuParent[_player]);
+        return dsuParent[_player];
+    }
+
+    // Keep a view version for when we don't want to modify state
+    function _findView(address _player) internal view returns (address) {
         address root = _player;
         while (root != dsuParent[root]) {
             root = dsuParent[root];
@@ -391,29 +389,34 @@ contract Game {
             }
             dsuParent[rootB] = rootA;
             dsuSetSize[rootA] += dsuSetSize[rootB];
+            // We don't reset rootB's size since it might be needed for other operations
             emit AllianceUpdated(_playerA, _playerB, true);
         }
     }
 
     function _resetAndUnion(address _actor, address _targetPlayer) internal {
-        // Actor leaves their current alliance set to form a new one or join another.
-        // This effectively makes the actor their own parent first.
-        address oldRoot = _find(_actor);
-        if (oldRoot != _actor) {
-            // If actor was not already a root
-            // This is a simplified way to handle unbinding.
-            // A full DSU unbind is complex. This makes actor a new root.
-            // Iterate through all players to fix parent pointers if oldRoot size decreases significantly.
-            // For this game, simply making actor its own root might be sufficient before new union.
-            // Recalculate size of oldRoot if needed, or accept temporary DSU SetSize inaccuracy for oldRoot.
-            // For on-chain logic, this makes _actor its own set of size 1.
-        }
-        dsuParent[_actor] = _actor;
-        dsuSetSize[_actor] = 1;
-        // If _actor was part of oldRoot, and oldRoot != _actor, then dsuSetSize[oldRoot] should decrease.
-        // This is non-trivial to implement correctly and efficiently with standard DSU.
-        // The game spec "unbinding with previously binded players" for Gift implies this isolation.
+        // Check if they're already in the same alliance
+        address actorRoot = _find(_actor);
+        address targetRoot = _find(_targetPlayer);
 
+        if (actorRoot == targetRoot) {
+            // Already in the same alliance, no need to do anything
+            return;
+        }
+
+        // Get actor's current set size before resetting
+        uint8 actorSize = 1; // Actor themselves
+
+        // Update the old root's size by removing the actor
+        if (actorRoot != _actor) {
+            dsuSetSize[actorRoot] -= 1;
+        }
+
+        // Reset actor's parent and size
+        dsuParent[_actor] = _actor;
+        dsuSetSize[_actor] = actorSize;
+
+        // Now create the new union
         _union(_actor, _targetPlayer);
     }
 
@@ -423,7 +426,7 @@ contract Game {
     ) public view returns (bool) {
         if (!playerData[_playerA].hasJoined || !playerData[_playerB].hasJoined)
             return false;
-        return _find(_playerA) == _find(_playerB);
+        return _findView(_playerA) == _findView(_playerB);
     }
 
     // --- Cooldown and Actor Validation Logic ---
@@ -455,6 +458,11 @@ contract Game {
         }
         playerData[_actor].lastMoveTimestamp[uint256(_move)] = block.timestamp;
         playerData[_actor].inactivityTimestamp = block.timestamp;
+
+        // Track this move as the last executed move (unless it's a Copycat move)
+        if (_move != MoveType.CopycatMove) {
+            _lastMoveExecuted = _move;
+        }
     }
 
     // --- Global Effect Checkers ---
@@ -644,69 +652,17 @@ contract Game {
         );
 
         require(
-            uint(_lastEligibleMoveForCopycat) != 0 ||
-                (_lastEligibleMoveForCopycat == MoveType.UnlockChest ||
-                    _lastEligibleMoveForCopycat == MoveType.UnsealChest),
+            uint(_lastMoveExecuted) != 0 &&
+                _lastMoveExecuted != MoveType.CopycatMove,
             "No valid move to copy"
-        ); // Check it's one of the copyable types
+        );
 
-        string memory copiedActionDetail;
-
-        if (_lastEligibleMoveForCopycat == MoveType.UnlockChest) {
-            require(!_isPleaOfPeaceActive(), "Plea of Peace active");
-            if (activeFakeKeysCount > 0) {
-                activeFakeKeysCount--;
-                emit FakeKeyAdded(activeFakeKeysCount);
-                copiedActionDetail = "Copied UnlockChest, hit FakeKey";
-            } else {
-                if (_lastCopiedMoveUsedEnchantedKey) {
-                    require(
-                        playerData[_actor].enchantedKeys > 0,
-                        "Need Enchanted Key for copy"
-                    );
-                    playerData[_actor].enchantedKeys--;
-                    if (padlocks > 0) padlocks--;
-                    if (seals > 0) seals--;
-                    emit ItemsChanged(_actor, "EnchantedKey", -1);
-                    copiedActionDetail = "Copied UnlockChest (E.Key)";
-                } else {
-                    require(playerData[_actor].keys > 0, "Need Key for copy");
-                    playerData[_actor].keys--;
-                    if (padlocks > 0) padlocks--;
-                    emit ItemsChanged(_actor, "Key", -1);
-                    copiedActionDetail = "Copied UnlockChest (Key)";
-                }
-                emit ChestStateChanged(padlocks, seals);
-                _checkOpenVictory(_actor);
-            }
-        } else if (_lastEligibleMoveForCopycat == MoveType.UnsealChest) {
-            require(!_isPleaOfPeaceActive(), "Plea of Peace active");
-            if (_lastCopiedMoveUsedEnchantedKey) {
-                require(
-                    playerData[_actor].enchantedKeys > 0,
-                    "Need Enchanted Key for copy"
-                );
-                playerData[_actor].enchantedKeys--;
-                if (seals > 0) seals--;
-                if (padlocks > 0) padlocks--; // E.Key also removes padlock
-                emit ItemsChanged(_actor, "EnchantedKey", -1);
-                copiedActionDetail = "Copied UnsealChest (E.Key)";
-            } else {
-                // Staff was used
-                require(playerData[_actor].staffs > 0, "Need Staff for copy");
-                playerData[_actor].staffs--;
-                if (seals > 0) seals--;
-                emit ItemsChanged(_actor, "Staff", -1);
-                copiedActionDetail = "Copied UnsealChest (Staff)";
-            }
-            emit ChestStateChanged(padlocks, seals);
-            _checkOpenVictory(_actor);
-        }
+        // Just emit that the move was copied
         emit MoveExecuted(
             msg.sender,
             _actor,
             MoveType.CopycatMove,
-            copiedActionDetail
+            string(abi.encodePacked("Copied move: ", uint8(_lastMoveExecuted)))
         );
     }
 
@@ -925,7 +881,6 @@ contract Game {
         }
 
         playerData[_actor].keys++;
-        _anyKeyHasBeenForged = true; // For Artist's Enchanted Key
         emit KeyForgedObservation();
         emit ItemsChanged(_actor, "Key", 1);
         emit MoveExecuted(msg.sender, _actor, MoveType.ForgeKey, "Forged Key");
@@ -1164,9 +1119,7 @@ contract Game {
                 MoveType.UnlockChest,
                 "Hit Fake Key, no effect"
             );
-            // Update Copycat info even on fake key hit, as an UnlockChest was ATTEMPTED
-            _lastEligibleMoveForCopycat = MoveType.UnlockChest;
-            _lastCopiedMoveUsedEnchantedKey = _useEnchantedKey;
+            // No need to set _lastMoveExecuted here as it's handled in _validateAndPrepareActor
             return;
         }
 
@@ -1182,9 +1135,6 @@ contract Game {
             if (padlocks > 0) padlocks--;
             emit ItemsChanged(_actor, "Key", -1);
         }
-
-        _lastEligibleMoveForCopycat = MoveType.UnlockChest;
-        _lastCopiedMoveUsedEnchantedKey = _useEnchantedKey;
 
         emit ChestStateChanged(padlocks, seals);
         emit MoveExecuted(
@@ -1223,9 +1173,6 @@ contract Game {
             if (seals > 0) seals--;
             emit ItemsChanged(_actor, "Staff", -1);
         }
-
-        _lastEligibleMoveForCopycat = MoveType.UnsealChest;
-        _lastCopiedMoveUsedEnchantedKey = _useEnchantedKey;
 
         emit ChestStateChanged(padlocks, seals);
         emit MoveExecuted(
