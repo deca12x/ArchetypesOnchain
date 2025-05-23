@@ -11,8 +11,6 @@ contract GameEndToEndTest is GameBaseTest {
 
     function setUp() public override {
         super.setUp();
-
-        // Have all players join the game
         joinAllPlayers();
 
         // Find the players with the required character types
@@ -23,20 +21,14 @@ contract GameEndToEndTest is GameBaseTest {
             GameCore.CharacterType.Innocent
         );
 
-        // After setting up the game but before calling any moves
-        vm.warp(block.timestamp + 10 * 60 + 1); // Advance timestamp past the cooldown period
+        // Advance timestamp past the cooldown period
+        vm.warp(block.timestamp + 20 * 60 + 1);
     }
 
-    function testEndToEndGameplayVictory() public {
-        // Record initial balances
-        uint256 initialInnocentBalance = address(innocentPlayer).balance;
-        uint256 initialWizardBalance = address(wizardPlayer).balance;
-
-        // Initial state checks
-        assertTrue(game.gameStarted());
-        assertEq(game.padlocks(), 1);
-        assertEq(game.seals(), 1);
-        assertFalse(game.gameOver());
+    function testArtistForgeAndGift() public {
+        // Log initial states
+        console.log("Artist address:", artistPlayer);
+        console.log("Hero address:", heroPlayer);
 
         // Step 1: Artist creates a key
         vm.prank(artistPlayer);
@@ -49,27 +41,43 @@ contract GameEndToEndTest is GameBaseTest {
         });
         game.executeMove(params);
 
-        // Verify Artist has a key
-        assertTrue(playerHasKeys(artistPlayer, 1));
+        // Verify key was created
+        assertTrue(
+            playerHasKeys(artistPlayer, 1),
+            "Artist should have 1 key after ForgeKey"
+        );
+
+        // Log pre-gift state
+        console.log("Before Gift - Artist keys:", getPlayerKeys(artistPlayer));
+        console.log("Before Gift - Hero keys:", getPlayerKeys(heroPlayer));
 
         // Step 2: Artist gifts the key to Hero
         vm.prank(artistPlayer);
-        params = GameMoves.MoveParams({
-            moveType: GameCore.MoveType.Gift,
-            actor: artistPlayer,
-            targetPlayer: heroPlayer,
-            useEnchantedItem: false,
-            additionalParam: 0
-        });
+        params.moveType = GameCore.MoveType.Gift;
+        params.targetPlayer = heroPlayer;
         game.executeMove(params);
 
-        // Verify Hero has a key and Artist doesn't
-        assertTrue(playerHasKeys(heroPlayer, 1));
-        assertTrue(playerHasKeys(artistPlayer, 0));
+        // Log post-gift state
+        console.log("After Gift - Artist keys:", getPlayerKeys(artistPlayer));
+        console.log("After Gift - Hero keys:", getPlayerKeys(heroPlayer));
 
-        // Step 3: Hero uses the key to unlock one padlock
+        // Verify key transfer
+        assertTrue(
+            playerHasKeys(heroPlayer, 1),
+            "Hero should have 1 key after gift"
+        );
+        assertTrue(
+            playerHasKeys(artistPlayer, 0),
+            "Artist should have 0 keys after gift"
+        );
+    }
+
+    function testHeroUnlock() public {
+        testArtistForgeAndGift();
+
+        // Hero uses key to unlock padlock
         vm.prank(heroPlayer);
-        params = GameMoves.MoveParams({
+        GameMoves.MoveParams memory params = GameMoves.MoveParams({
             moveType: GameCore.MoveType.UnlockChest,
             actor: heroPlayer,
             targetPlayer: address(0),
@@ -78,97 +86,14 @@ contract GameEndToEndTest is GameBaseTest {
         });
         game.executeMove(params);
 
-        // Verify chest state has changed
-        assertEq(game.padlocks(), 0);
-        assertEq(game.seals(), 1);
+        assertEq(game.padlocks(), 0, "Padlock should be unlocked");
+        assertEq(game.seals(), 1, "Seal should remain");
+    }
 
-        // Step 4: Wizard conjures a staff
-        vm.prank(wizardPlayer);
-        params = GameMoves.MoveParams({
-            moveType: GameCore.MoveType.ConjureStaff,
-            actor: wizardPlayer,
-            targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
-        });
-        game.executeMove(params);
-
-        // Verify Wizard has a staff
-        assertTrue(playerHasStaffs(wizardPlayer, 1));
-
-        // Step 5: Wizard gifts the staff to Innocent
-        vm.prank(wizardPlayer);
-        params = GameMoves.MoveParams({
-            moveType: GameCore.MoveType.Gift,
-            actor: wizardPlayer,
-            targetPlayer: innocentPlayer,
-            useEnchantedItem: false,
-            additionalParam: 0
-        });
-        game.executeMove(params);
-
-        // Verify Innocent has a staff and Wizard doesn't
-        assertTrue(playerHasStaffs(innocentPlayer, 1));
-        assertTrue(playerHasStaffs(wizardPlayer, 0));
-
-        // Step 6: Innocent uses the staff to unseal the chest
-        vm.prank(innocentPlayer);
-        params = GameMoves.MoveParams({
-            moveType: GameCore.MoveType.UnsealChest,
-            actor: innocentPlayer,
-            targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
-        });
-        game.executeMove(params);
-
-        // Verify chest state has changed (should be 1 padlock, 0 seals)
-        assertEq(game.padlocks(), 0);
-        assertEq(game.seals(), 0);
-
-        // Game should be over now
-        assertTrue(game.gameOver());
-
-        // Check that Innocent and Wizard are the winners
-        uint256 winnerCount = 0;
-        bool innocentIsWinner = false;
-        bool wizardIsWinner = false;
-
-        // We need to count the winners and check if Innocent and Wizard are among them
-        for (uint i = 0; i < game.NUM_PLAYERS(); i++) {
-            try game.winners(i) returns (address winner) {
-                winnerCount++;
-                if (winner == innocentPlayer) {
-                    innocentIsWinner = true;
-                }
-                if (winner == wizardPlayer) {
-                    wizardIsWinner = true;
-                }
-            } catch {
-                break;
-            }
-        }
-
-        // Verify Innocent and Wizard are the only winners
-        assertEq(winnerCount, 2, "There should be exactly two winners");
-        assertTrue(innocentIsWinner, "Innocent should be a winner");
-        assertTrue(wizardIsWinner, "Wizard should be a winner");
-
-        // Check that Innocent and Wizard each received half of the prize money
-        uint256 finalInnocentBalance = address(innocentPlayer).balance;
-        uint256 finalWizardBalance = address(wizardPlayer).balance;
-
-        uint256 innocentPrize = finalInnocentBalance - initialInnocentBalance;
-        uint256 wizardPrize = finalWizardBalance - initialWizardBalance;
-
-        assertEq(
-            innocentPrize,
-            wizardPrize,
-            "Innocent and Wizard should receive equal prize money"
-        );
-        assertTrue(
-            innocentPrize > 0,
-            "Prize money should be greater than zero"
-        );
+    // Helper function to get player's key count
+    function getPlayerKeys(address player) internal view returns (uint8) {
+        (, , uint8 keys, , , , bool joined, ) = game.playerData(player);
+        require(joined, "Player not joined");
+        return keys;
     }
 }

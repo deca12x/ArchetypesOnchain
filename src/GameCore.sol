@@ -5,10 +5,31 @@ import "./GameLibrary.sol";
 import "./PlayerLibrary.sol";
 
 contract GameCore {
+    // --- Custom Errors ---
+    error InvalidTarget();
+    error PeaceActive();
+    error NoItems();
+    error NoKey();
+    error NoEKey();
+    error NoStaff();
+    error NoValidMove();
+    error CannotUseMove();
+    error InvalidGlobalMove();
+    error InvalidChestLockMove();
+    error InvalidItemCreateMove();
+    error InsufficientKeys();
+    error InsufficientEnchantedKeys();
+    error InsufficientStaffs();
+    error InvalidMoveType();
+    error NotAPlayer(address player);
+    error PlayerNotInactive();
+    error MoveOnCooldown();
+    error TargetNotPlayer();
+
     // Constants
     uint8 public constant NUM_PLAYERS = 12;
     uint256 public constant ENTRY_FEE_MNT = 0.01 ether; // 0.01 MNT
-    uint256 private constant IDLE_PLAYER_LIMIT = 7 * 60 seconds;
+    uint256 internal constant IDLE_PLAYER_LIMIT = 7 * 60 seconds;
 
     // Enums
     enum CharacterType {
@@ -229,18 +250,42 @@ contract GameCore {
         characterCanUseMove[CharacterType.Sage][MoveType.UnsealChest] = true;
         characterCanUseMove[CharacterType.Sage][MoveType.ArcaneSeal] = true;
 
-        // Add shared moves (like Gift) to all characters
+        // Add shared moves (Gift only)
         for (uint8 i = 0; i < uint8(CharacterType.Sage) + 1; i++) {
             characterCanUseMove[CharacterType(i)][MoveType.Gift] = true;
-            characterCanUseMove[CharacterType(i)][MoveType.PleaOfPeace] = true;
         }
     }
 
     // Initialize cooldowns
     function _initializeCooldowns() internal {
-        moveCooldowns[MoveType.InspireAlliance] = 4 * 60;
-        moveCooldowns[MoveType.Discover] = 5 * 60;
-        // More cooldowns will go here...
+        // Unique moves (4-5 minutes)
+        moveCooldowns[MoveType.InspireAlliance] = 4 * 60; // Hero
+        moveCooldowns[MoveType.Discover] = 5 * 60; // Explorer
+        moveCooldowns[MoveType.Purify] = 5 * 60; // Innocent
+        moveCooldowns[MoveType.CreateEnchantedKey] = 5 * 60; // Artist
+        moveCooldowns[MoveType.RoyalDecree] = 5 * 60; // Ruler
+        moveCooldowns[MoveType.GuardianBond] = 4 * 60; // Caregiver
+        moveCooldowns[MoveType.CopycatMove] = 5 * 60; // CommonMan
+        moveCooldowns[MoveType.CreateFakeKey] = 5 * 60; // Joker
+        moveCooldowns[MoveType.ConjureStaff] = 5 * 60; // Wizard
+        moveCooldowns[MoveType.Lockpick] = 5 * 60; // Outlaw
+        moveCooldowns[MoveType.SoulBond] = 4 * 60; // Lover
+        moveCooldowns[MoveType.EnergyFlow] = 5 * 60; // Sage
+
+        // Shared moves (2-3 minutes)
+        moveCooldowns[MoveType.ForgeKey] = 3 * 60;
+        moveCooldowns[MoveType.SecureChest] = 3 * 60;
+        moveCooldowns[MoveType.ArcaneSeal] = 3 * 60;
+        moveCooldowns[MoveType.SeizeItem] = 2 * 60;
+        moveCooldowns[MoveType.Distract] = 2 * 60;
+        moveCooldowns[MoveType.Guard] = 3 * 60;
+        moveCooldowns[MoveType.Evade] = 3 * 60;
+        moveCooldowns[MoveType.PleaOfPeace] = 5 * 60;
+
+        // No cooldown for these moves
+        moveCooldowns[MoveType.UnlockChest] = 0;
+        moveCooldowns[MoveType.UnsealChest] = 0;
+        moveCooldowns[MoveType.Gift] = 3 * 60;
     }
 
     // Initialize character assignments with pseudo-random shuffle
@@ -349,6 +394,10 @@ contract GameCore {
             playerData[playerAddr].inactivityTimestamp = block.timestamp;
         }
 
+        // Explicitly initialize global effect timers
+        pleaOfPeaceEndTime = 0;
+        royalDecreeEndTime = 0;
+
         emit GameStarted(block.timestamp, padlocks, seals);
         emit ChestStateChanged(padlocks, seals);
     }
@@ -370,31 +419,32 @@ contract GameCore {
         address _actor,
         MoveType _move
     ) internal {
-        require(playerData[_caller].hasJoined, "Caller not a player");
-        require(playerData[_actor].hasJoined, "Actor not a player");
+        if (!playerData[_caller].hasJoined) revert NotAPlayer(_caller);
+        if (!playerData[_actor].hasJoined) revert NotAPlayer(_actor);
 
         if (_caller != _actor) {
-            require(
-                block.timestamp >=
-                    playerData[_actor].inactivityTimestamp + IDLE_PLAYER_LIMIT,
-                "Actor not inactive long enough"
-            );
+            if (
+                block.timestamp <
+                playerData[_actor].inactivityTimestamp + IDLE_PLAYER_LIMIT
+            ) {
+                revert PlayerNotInactive();
+            }
         }
 
         uint256 cooldownDuration = moveCooldowns[_move];
         if (cooldownDuration > 0) {
-            require(
-                block.timestamp >=
-                    playerData[_actor].lastMoveTimestamp[uint256(_move)] +
-                        cooldownDuration,
-                "Move on cooldown"
-            );
+            if (
+                block.timestamp <
+                playerData[_actor].lastMoveTimestamp[uint256(_move)] +
+                    cooldownDuration
+            ) {
+                revert MoveOnCooldown();
+            }
         }
 
         playerData[_actor].lastMoveTimestamp[uint256(_move)] = block.timestamp;
         playerData[_actor].inactivityTimestamp = block.timestamp;
 
-        // Track last executed move
         if (_move != MoveType.CopycatMove) {
             _lastMoveExecuted = _move;
         }

@@ -2,42 +2,27 @@
 pragma solidity ^0.8.19;
 
 import "./GameCore.sol";
+import "./PlayerLibrary.sol";
 
 contract GameMoves is GameCore {
-    // --- Custom Errors (major size reduction) ---
-    error InvalidTarget();
-    error PeaceActive();
-    error NoItems();
-    error NoKey();
-    error NoEKey();
-    error NoStaff();
-    error NoValidMove();
-    error CannotUseMove();
-
     // --- Packed Constants ---
     uint8 constant ITEM_KEY = 0;
     uint8 constant ITEM_ENCHANTED_KEY = 1;
     uint8 constant ITEM_STAFF = 2;
 
-    // Move categories packed into single uint256
-    uint256 constant MOVE_CATEGORIES =
-        (1 << 0) | // InspireAlliance - ALLIANCE
-            (1 << 8) | // GuardianBond - ALLIANCE
-            (1 << 16) | // SoulBond - ALLIANCE
-            (2 << 24) | // CreateEnchantedKey - ITEM_CREATE
-            (2 << 32) | // ConjureStaff - ITEM_CREATE
-            (2 << 40) | // ForgeKey - ITEM_CREATE
-            (2 << 48) | // CreateFakeKey - ITEM_CREATE
-            (4 << 56) | // SecureChest - CHEST_LOCK
-            (4 << 64) | // ArcaneSeal - CHEST_LOCK
-            (8 << 72) | // Lockpick - CHEST_UNLOCK
-            (8 << 80) | // Purify - CHEST_UNLOCK
-            (8 << 88) | // UnlockChest - CHEST_UNLOCK
-            (8 << 96) | // UnsealChest - CHEST_UNLOCK
-            (16 << 104) | // Guard - PROTECTION
-            (16 << 112) | // Evade - PROTECTION
-            (32 << 120) | // RoyalDecree - GLOBAL
-            (32 << 128); // PleaOfPeace - GLOBAL
+    // --- Move Categories ---
+    enum MoveCategory {
+        NONE, // 0
+        ALLIANCE, // 1
+        ITEM_CREATE, // 2
+        CHEST_LOCK, // 3
+        CHEST_UNLOCK, // 4
+        PROTECTION, // 5
+        GLOBAL // 6
+    }
+
+    // Mapping of moves to their categories
+    mapping(MoveType => MoveCategory) private moveToCategoryMap;
 
     MoveType public lastMoveExecuted;
 
@@ -59,6 +44,40 @@ contract GameMoves is GameCore {
         uint8 additionalParam;
     }
 
+    // Initialize this in the constructor
+    constructor() {
+        // Alliance moves
+        moveToCategoryMap[MoveType.InspireAlliance] = MoveCategory.ALLIANCE;
+        moveToCategoryMap[MoveType.GuardianBond] = MoveCategory.ALLIANCE;
+        moveToCategoryMap[MoveType.SoulBond] = MoveCategory.ALLIANCE;
+        moveToCategoryMap[MoveType.Gift] = MoveCategory.ALLIANCE;
+
+        // Item creation moves
+        moveToCategoryMap[MoveType.CreateEnchantedKey] = MoveCategory
+            .ITEM_CREATE;
+        moveToCategoryMap[MoveType.ConjureStaff] = MoveCategory.ITEM_CREATE;
+        moveToCategoryMap[MoveType.ForgeKey] = MoveCategory.ITEM_CREATE;
+        moveToCategoryMap[MoveType.CreateFakeKey] = MoveCategory.ITEM_CREATE;
+
+        // Chest locking moves
+        moveToCategoryMap[MoveType.SecureChest] = MoveCategory.CHEST_LOCK;
+        moveToCategoryMap[MoveType.ArcaneSeal] = MoveCategory.CHEST_LOCK;
+
+        // Chest unlocking moves
+        moveToCategoryMap[MoveType.Lockpick] = MoveCategory.CHEST_UNLOCK;
+        moveToCategoryMap[MoveType.Purify] = MoveCategory.CHEST_UNLOCK;
+        moveToCategoryMap[MoveType.UnlockChest] = MoveCategory.CHEST_UNLOCK;
+        moveToCategoryMap[MoveType.UnsealChest] = MoveCategory.CHEST_UNLOCK;
+
+        // Protection moves
+        moveToCategoryMap[MoveType.Guard] = MoveCategory.PROTECTION;
+        moveToCategoryMap[MoveType.Evade] = MoveCategory.PROTECTION;
+
+        // Global effect moves
+        moveToCategoryMap[MoveType.RoyalDecree] = MoveCategory.GLOBAL;
+        moveToCategoryMap[MoveType.PleaOfPeace] = MoveCategory.GLOBAL;
+    }
+
     // --- Main Execute Function ---
     function executeMove(
         MoveParams calldata p
@@ -66,25 +85,35 @@ contract GameMoves is GameCore {
         _validateAndPrepareActor(msg.sender, p.actor, p.moveType);
         if (!canUseMove(p.actor, p.moveType)) revert CannotUseMove();
 
-        uint8 category = uint8(MOVE_CATEGORIES >> (uint256(p.moveType) * 8));
+        MoveCategory category = moveToCategoryMap[p.moveType];
         uint8 result;
 
-        if (category == 1) result = _execAlliance(p.actor, p.targetPlayer);
-        else if (category == 2) result = _execItemCreate(p.actor, p.moveType);
-        else if (category == 4) result = _execChestLock(p.actor, p.moveType);
-        else if (category == 8)
-            result = _execChestUnlock(p.actor, p.moveType, p.useEnchantedItem);
-        else if (category == 16)
-            result = _execProtection(p.actor, p.targetPlayer, p.moveType);
-        else if (category == 32) result = _execGlobal(p.actor, p.moveType);
-        else result = _execSpecial(p.actor, p.targetPlayer, p.moveType);
+        if (category == MoveCategory.NONE) revert InvalidMoveType();
 
-        if (p.moveType != MoveType.CopycatMove) lastMoveExecuted = p.moveType;
+        if (category == MoveCategory.ALLIANCE) {
+            result = _execAlliance(p.actor, p.targetPlayer, p.moveType);
+        } else if (category == MoveCategory.ITEM_CREATE) {
+            result = _execItemCreate(p.actor, p.moveType);
+        } else if (category == MoveCategory.CHEST_LOCK) {
+            result = _execChestLock(p.actor, p.moveType);
+        } else if (category == MoveCategory.CHEST_UNLOCK) {
+            result = _execChestUnlock(p.actor, p.moveType, p.useEnchantedItem);
+        } else if (category == MoveCategory.PROTECTION) {
+            result = _execProtection(p.actor, p.targetPlayer, p.moveType);
+        } else if (category == MoveCategory.GLOBAL) {
+            result = _execGlobal(p.actor, p.moveType);
+        } else {
+            result = _execSpecial(p.actor, p.targetPlayer, p.moveType);
+        }
+
+        if (p.moveType != MoveType.CopycatMove) {
+            lastMoveExecuted = p.moveType;
+        }
 
         emit GameAction(
             p.actor,
             p.targetPlayer,
-            category,
+            uint8(category),
             result,
             uint256(p.moveType)
         );
@@ -93,80 +122,140 @@ contract GameMoves is GameCore {
     // --- Optimized Category Implementations ---
     function _execAlliance(
         address actor,
-        address target
+        address target,
+        MoveType moveType
     ) internal returns (uint8) {
-        if (target == actor || !playerData[target].hasJoined)
-            revert InvalidTarget();
+        _validateCharacterMove(actor, moveType);
 
-        bool success = GameLibrary.resetAndUnion(
-            dsuParent,
-            dsuSetSize,
-            actor,
-            target
-        );
-        if (success) {
+        if (moveType == MoveType.Gift) {
+            if (
+                playerData[actor].keys +
+                    playerData[actor].enchantedKeys +
+                    playerData[actor].staffs ==
+                0
+            ) revert NoItems();
+            if (target == actor || !playerData[target].hasJoined)
+                revert InvalidTarget();
+
+            uint8 totalGifted;
+            if (playerData[actor].keys > 0) {
+                uint8 amount = playerData[actor].keys;
+                _modifyItem(target, ITEM_KEY, int8(amount));
+                _modifyItem(actor, ITEM_KEY, -int8(amount));
+                totalGifted += amount;
+            }
+            if (playerData[actor].enchantedKeys > 0) {
+                uint8 amount = playerData[actor].enchantedKeys;
+                _modifyItem(target, ITEM_ENCHANTED_KEY, int8(amount));
+                _modifyItem(actor, ITEM_ENCHANTED_KEY, -int8(amount));
+                totalGifted += amount;
+            }
+            if (playerData[actor].staffs > 0) {
+                uint8 amount = playerData[actor].staffs;
+                _modifyItem(target, ITEM_STAFF, int8(amount));
+                _modifyItem(actor, ITEM_STAFF, -int8(amount));
+                totalGifted += amount;
+            }
+
+            GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, target);
             emit AllianceUpdated(actor, target, true);
-            return 1;
+            return totalGifted;
+        } else {
+            if (target == actor || !playerData[target].hasJoined)
+                revert InvalidTarget();
+
+            bool success = GameLibrary.resetAndUnion(
+                dsuParent,
+                dsuSetSize,
+                actor,
+                target
+            );
+            if (success) {
+                emit AllianceUpdated(actor, target, true);
+                return 1;
+            }
+            return 0;
         }
-        return 0;
     }
 
     function _execItemCreate(
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        // ForgeKey is MoveType 12, CreateEnchantedKey is MoveType 3
-        // We need to handle both the original item creation moves and ForgeKey
-
-        if (moveType == MoveType.ForgeKey) {
-            if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) return 0;
-
-            _modifyItem(actor, ITEM_KEY, 1);
-            emit GameAction(actor, address(0), 99, 0, 0); // KeyForged marker
-            return 1;
+        _validateCharacterMove(actor, moveType);
+        // Explicit validation first
+        if (
+            moveType != MoveType.CreateEnchantedKey &&
+            moveType != MoveType.ConjureStaff &&
+            moveType != MoveType.ForgeKey &&
+            moveType != MoveType.CreateFakeKey
+        ) {
+            revert InvalidItemCreateMove();
         }
 
-        // Original logic for other item creation moves
-        uint8 idx = uint8(moveType) - uint8(MoveType.CreateEnchantedKey);
+        uint8 itemType;
+        uint8 result;
+        bool isFakeKey = false;
 
-        // Optimized lookup arrays
-        uint8[4] memory items = [ITEM_ENCHANTED_KEY, ITEM_STAFF, ITEM_KEY, 255];
-        uint8[4] memory results = [1, 2, 3, 4];
-
-        if (idx == 2 && GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
-            return 0;
-
-        if (idx < 3) {
-            _modifyItem(actor, items[idx], 1);
-            if (idx == 2) emit GameAction(actor, address(0), 99, 0, 0); // KeyForged marker
+        if (moveType == MoveType.CreateEnchantedKey) {
+            itemType = ITEM_ENCHANTED_KEY;
+            result = 1;
+        } else if (moveType == MoveType.ConjureStaff) {
+            itemType = ITEM_STAFF;
+            result = 2;
+        } else if (moveType == MoveType.ForgeKey) {
+            if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
+                emit GameAction(actor, address(0), 8, 0, uint256(moveType));
+                return 0;
+            }
+            itemType = ITEM_KEY;
+            result = 1;
         } else {
-            activeFakeKeysCount++;
-            emit GameAction(actor, address(0), 98, activeFakeKeysCount, 0); // FakeKey marker
+            // Must be CreateFakeKey due to validation above
+            isFakeKey = true;
+            result = 1;
         }
 
-        return results[idx];
+        if (isFakeKey) {
+            activeFakeKeysCount++;
+            emit GameAction(actor, address(0), 98, activeFakeKeysCount, 0);
+        } else {
+            _modifyItem(actor, itemType, 1);
+        }
+
+        return result;
     }
 
     function _execChestLock(
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
+        _validateCharacterMove(actor, moveType);
+        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
             revert PeaceActive();
+        }
 
-        assembly {
-            let slot := add(padlocks.slot, mul(eq(moveType, 0x0A), 1)) // SecureChest = 0x0A
-            let val := sload(slot)
-            sstore(slot, add(val, 1))
+        // Explicit validation with revert
+        if (
+            moveType != MoveType.SecureChest && moveType != MoveType.ArcaneSeal
+        ) {
+            revert InvalidChestLockMove();
+        }
+
+        if (moveType == MoveType.SecureChest) {
+            padlocks++;
+        } else {
+            seals++;
         }
 
         emit GameAction(
             actor,
             address(0),
-            4,
+            uint8(MoveCategory.CHEST_LOCK),
             1,
             (uint256(padlocks) << 8) | seals
         );
+
         _checkBlockVictory(actor);
         return 1;
     }
@@ -176,6 +265,7 @@ contract GameMoves is GameCore {
         MoveType moveType,
         bool useEnchanted
     ) internal returns (uint8) {
+        _validateCharacterMove(actor, moveType);
         if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
             revert PeaceActive();
 
@@ -240,9 +330,11 @@ contract GameMoves is GameCore {
         address target,
         MoveType moveType
     ) internal returns (uint8) {
+        _validateCharacterMove(actor, moveType);
         address protectee = target == address(0) ? actor : target;
-        if (target != address(0) && !playerData[target].hasJoined)
-            revert InvalidTarget();
+        if (target != address(0)) {
+            if (!playerData[target].hasJoined) revert TargetNotPlayer();
+        }
 
         playerData[protectee].protections++;
         emit GameAction(protectee, address(0), 16, 1, uint256(moveType));
@@ -253,6 +345,14 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
+        _validateCharacterMove(actor, moveType);
+        // Explicit validation with revert
+        if (
+            moveType != MoveType.PleaOfPeace && moveType != MoveType.RoyalDecree
+        ) {
+            revert InvalidGlobalMove();
+        }
+
         uint256 endTime = block.timestamp +
             (moveType == MoveType.RoyalDecree ? 60 : 120);
 
@@ -262,7 +362,13 @@ contract GameMoves is GameCore {
             pleaOfPeaceEndTime = endTime;
         }
 
-        emit GameAction(actor, address(0), 32, 1, endTime);
+        emit GameAction(
+            actor,
+            address(0),
+            uint8(MoveCategory.GLOBAL),
+            1,
+            endTime
+        );
         return 1;
     }
 
@@ -271,6 +377,7 @@ contract GameMoves is GameCore {
         address target,
         MoveType moveType
     ) internal returns (uint8) {
+        _validateCharacterMove(actor, moveType);
         if (moveType == MoveType.Discover) {
             uint8 itemType = uint8(
                 uint256(
@@ -283,14 +390,7 @@ contract GameMoves is GameCore {
             return itemType + 1;
         }
 
-        if (moveType == MoveType.CopycatMove) {
-            if (
-                uint(lastMoveExecuted) == 0 ||
-                lastMoveExecuted == MoveType.CopycatMove
-            ) revert NoValidMove();
-            return 1;
-        }
-
+        if (moveType == MoveType.CopycatMove) return _execCopycatMove(actor);
         if (moveType == MoveType.EnergyFlow) return _execEnergyFlow(actor);
         if (moveType == MoveType.SeizeItem)
             return _execSeizeItem(actor, target);
@@ -302,29 +402,44 @@ contract GameMoves is GameCore {
 
     // --- Optimized Helper Functions ---
     function _modifyItem(address player, uint8 itemType, int8 amount) internal {
-        assembly {
-            let playerSlot := playerData.slot
-            let key := player
-            mstore(0x0, key)
-            mstore(0x20, playerSlot)
-            let baseSlot := keccak256(0x0, 0x40)
+        if (amount == 0) return;
 
-            // Calculate item offset (keys=0, enchantedKeys=1, staffs=2)
-            let itemSlot := add(baseSlot, add(2, itemType)) // +2 for hasJoined(0) and protections(1)
-            let currentVal := sload(itemSlot)
-            let newVal := add(currentVal, amount)
-            sstore(itemSlot, newVal)
+        Player storage playerData_ = playerData[player];
+
+        if (amount > 0) {
+            if (itemType == ITEM_KEY) {
+                playerData_.keys += uint8(amount);
+            } else if (itemType == ITEM_ENCHANTED_KEY) {
+                playerData_.enchantedKeys += uint8(amount);
+            } else if (itemType == ITEM_STAFF) {
+                playerData_.staffs += uint8(amount);
+            } else {
+                revert InvalidMoveType();
+            }
+        } else {
+            uint8 absAmount = uint8(-amount);
+            if (itemType == ITEM_KEY) {
+                if (playerData_.keys < absAmount) revert InsufficientKeys();
+                playerData_.keys -= absAmount;
+            } else if (itemType == ITEM_ENCHANTED_KEY) {
+                if (playerData_.enchantedKeys < absAmount)
+                    revert InsufficientEnchantedKeys();
+                playerData_.enchantedKeys -= absAmount;
+            } else if (itemType == ITEM_STAFF) {
+                if (playerData_.staffs < absAmount) revert InsufficientStaffs();
+                playerData_.staffs -= absAmount;
+            } else {
+                revert InvalidMoveType();
+            }
         }
 
-        if (amount != 0) {
-            emit GameAction(
-                player,
-                address(0),
-                97,
-                uint8(itemType),
-                uint256(uint8(amount))
-            );
-        }
+        emit GameAction(
+            player,
+            address(0),
+            97, // Action type for item modification
+            itemType,
+            uint256(uint8(amount))
+        );
     }
 
     function _consumeProtection(address target) internal returns (bool) {
@@ -381,12 +496,11 @@ contract GameMoves is GameCore {
             ? ITEM_STAFF
             : 255;
 
-        if (itemType != 255) {
-            _modifyItem(target, itemType, -1);
-            _modifyItem(actor, itemType, 1);
-            return itemType + 1;
-        }
-        return 0;
+        if (itemType == 255) revert NoItems();
+
+        _modifyItem(target, itemType, -1);
+        _modifyItem(actor, itemType, 1);
+        return itemType + 1;
     }
 
     function _execDistract(
@@ -450,8 +564,33 @@ contract GameMoves is GameCore {
     }
 
     function _checkBlockVictory(address actor) internal {
-        if (!gameOver && padlocks >= 10 && seals >= 10) {
+        if (!gameOver && padlocks >= 3 && seals >= 3) {
             _distributePrizes(actor);
+        }
+    }
+
+    function _execCopycatMove(
+        address /* actor */ // Parameter commented out but kept for consistency in function signature
+    ) internal view returns (uint8) {
+        if (
+            uint(lastMoveExecuted) == 0 ||
+            lastMoveExecuted == MoveType.CopycatMove
+        ) {
+            revert NoValidMove();
+        }
+
+        // Return 1 to indicate success
+        // The actual copied move's effect will be handled by the next move
+        return 1;
+    }
+
+    // Add this helper function at the top of GameMoves contract
+    function _validateCharacterMove(
+        address actor,
+        MoveType moveType
+    ) internal view {
+        if (!characterCanUseMove[playerData[actor].character][moveType]) {
+            revert CannotUseMove();
         }
     }
 }
