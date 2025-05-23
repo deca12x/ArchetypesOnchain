@@ -37,7 +37,12 @@ contract GameEndToEnd2Test is GameBaseTest {
         assertEq(game.seals(), 1);
         assertFalse(game.gameOver());
 
+        // Before Step 1
+        console.log("Initial state - Padlocks:", game.padlocks());
+        console.log("Initial state - Seals:", game.seals());
+
         // Step 1: Ruler calls Secure Chest to add a padlock
+        vm.prank(rulerPlayer);
         GameMoves.MoveParams memory params = GameMoves.MoveParams({
             moveType: GameCore.MoveType.SecureChest,
             actor: rulerPlayer,
@@ -50,6 +55,9 @@ contract GameEndToEnd2Test is GameBaseTest {
         // Verify chest state has changed
         assertEq(game.padlocks(), 2);
         assertEq(game.seals(), 1);
+
+        // After Step 1 (Ruler's move)
+        console.log("After Ruler SecureChest - Padlocks:", game.padlocks());
 
         // Step 2: CommonMan calls Secure Chest to add another padlock
         vm.prank(commonManPlayer);
@@ -67,6 +75,9 @@ contract GameEndToEnd2Test is GameBaseTest {
         assertEq(game.seals(), 1);
         assertFalse(game.gameOver()); // Game should not be over yet (need 3 seals too)
 
+        // After Step 2 (CommonMan's move)
+        console.log("After CommonMan SecureChest - Padlocks:", game.padlocks());
+
         // Step 3: Wizard calls Arcane Seal to add a seal
         vm.prank(wizardPlayer);
         params = GameMoves.MoveParams({
@@ -83,6 +94,9 @@ contract GameEndToEnd2Test is GameBaseTest {
         assertEq(game.seals(), 2);
         assertFalse(game.gameOver()); // Game should not be over yet (need 3 seals)
 
+        // After Step 3 (Wizard's move)
+        console.log("After Wizard ArcaneSeal - Seals:", game.seals());
+
         // Step 4: Sage calls Arcane Seal to add another seal
         vm.prank(sagePlayer);
         params = GameMoves.MoveParams({
@@ -97,6 +111,9 @@ contract GameEndToEnd2Test is GameBaseTest {
         // Verify chest state has changed (should be 3 padlocks, 3 seals)
         assertEq(game.padlocks(), 3);
         assertEq(game.seals(), 3);
+
+        // After Step 4 (Sage's move)
+        console.log("After Sage ArcaneSeal - Seals:", game.seals());
 
         // Game should be over now
         assertTrue(game.gameOver());
@@ -140,5 +157,10 @@ contract GameEndToEnd2Test is GameBaseTest {
             expectedPrize,
             "Sage should have received all the prize money"
         );
+
+        // After victory
+        console.log("Final state - Padlocks:", game.padlocks());
+        console.log("Final state - Seals:", game.seals());
+        console.log("Sage's prize:", finalSageBalance - initialSageBalance);
     }
 }
