@@ -165,11 +165,74 @@ contract GameCore {
         characterCanUseMove[CharacterType.Explorer][MoveType.Guard] = true;
         characterCanUseMove[CharacterType.Explorer][MoveType.Evade] = true;
 
-        // More move mappings will go here...
+        // Innocent moves
+        characterCanUseMove[CharacterType.Innocent][MoveType.Purify] = true;
+        characterCanUseMove[CharacterType.Innocent][
+            MoveType.UnsealChest
+        ] = true;
+        characterCanUseMove[CharacterType.Innocent][
+            MoveType.PleaOfPeace
+        ] = true;
+
+        // Artist moves
+        characterCanUseMove[CharacterType.Artist][
+            MoveType.CreateEnchantedKey
+        ] = true;
+        characterCanUseMove[CharacterType.Artist][MoveType.ForgeKey] = true;
+        characterCanUseMove[CharacterType.Artist][MoveType.Evade] = true;
+
+        // Ruler moves
+        characterCanUseMove[CharacterType.Ruler][MoveType.RoyalDecree] = true;
+        characterCanUseMove[CharacterType.Ruler][MoveType.SecureChest] = true;
+        characterCanUseMove[CharacterType.Ruler][MoveType.SeizeItem] = true;
+
+        // Caregiver moves
+        characterCanUseMove[CharacterType.Caregiver][
+            MoveType.GuardianBond
+        ] = true;
+        characterCanUseMove[CharacterType.Caregiver][MoveType.Guard] = true;
+        characterCanUseMove[CharacterType.Caregiver][
+            MoveType.PleaOfPeace
+        ] = true;
+
+        // CommonMan moves
+        characterCanUseMove[CharacterType.CommonMan][
+            MoveType.CopycatMove
+        ] = true;
+        characterCanUseMove[CharacterType.CommonMan][
+            MoveType.SecureChest
+        ] = true;
+        characterCanUseMove[CharacterType.CommonMan][MoveType.Distract] = true;
+
+        // Joker moves
+        characterCanUseMove[CharacterType.Joker][MoveType.CreateFakeKey] = true;
+        characterCanUseMove[CharacterType.Joker][MoveType.SeizeItem] = true;
+        characterCanUseMove[CharacterType.Joker][MoveType.Distract] = true;
+
+        // Wizard moves
+        characterCanUseMove[CharacterType.Wizard][MoveType.ConjureStaff] = true;
+        characterCanUseMove[CharacterType.Wizard][MoveType.ForgeKey] = true;
+        characterCanUseMove[CharacterType.Wizard][MoveType.ArcaneSeal] = true;
+
+        // Outlaw moves
+        characterCanUseMove[CharacterType.Outlaw][MoveType.Lockpick] = true;
+        characterCanUseMove[CharacterType.Outlaw][MoveType.Evade] = true;
+        characterCanUseMove[CharacterType.Outlaw][MoveType.SeizeItem] = true;
+
+        // Lover moves
+        characterCanUseMove[CharacterType.Lover][MoveType.SoulBond] = true;
+        characterCanUseMove[CharacterType.Lover][MoveType.UnlockChest] = true;
+        characterCanUseMove[CharacterType.Lover][MoveType.Distract] = true;
+
+        // Sage moves
+        characterCanUseMove[CharacterType.Sage][MoveType.EnergyFlow] = true;
+        characterCanUseMove[CharacterType.Sage][MoveType.UnsealChest] = true;
+        characterCanUseMove[CharacterType.Sage][MoveType.ArcaneSeal] = true;
 
         // Add shared moves (like Gift) to all characters
         for (uint8 i = 0; i < uint8(CharacterType.Sage) + 1; i++) {
             characterCanUseMove[CharacterType(i)][MoveType.Gift] = true;
+            characterCanUseMove[CharacterType(i)][MoveType.PleaOfPeace] = true;
         }
     }
 

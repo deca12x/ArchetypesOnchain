@@ -16,10 +16,12 @@ contract GameEndToEnd2Test is GameBaseTest {
         joinAllPlayers();
 
         // Find the players with the required character types
-        rulerPlayer = findPlayerWithCharacter(Game.CharacterType.Ruler);
-        commonManPlayer = findPlayerWithCharacter(Game.CharacterType.CommonMan);
-        wizardPlayer = findPlayerWithCharacter(Game.CharacterType.Wizard);
-        sagePlayer = findPlayerWithCharacter(Game.CharacterType.Sage);
+        rulerPlayer = findPlayerWithCharacter(GameCore.CharacterType.Ruler);
+        commonManPlayer = findPlayerWithCharacter(
+            GameCore.CharacterType.CommonMan
+        );
+        wizardPlayer = findPlayerWithCharacter(GameCore.CharacterType.Wizard);
+        sagePlayer = findPlayerWithCharacter(GameCore.CharacterType.Sage);
 
         // After setting up the game but before calling any moves
         vm.warp(block.timestamp + 10 * 60 + 1); // Advance timestamp past the cooldown period
@@ -36,8 +38,14 @@ contract GameEndToEnd2Test is GameBaseTest {
         assertFalse(game.gameOver());
 
         // Step 1: Ruler calls Secure Chest to add a padlock
-        vm.prank(rulerPlayer);
-        game.secureChest(rulerPlayer);
+        GameMoves.MoveParams memory params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.SecureChest,
+            actor: rulerPlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify chest state has changed
         assertEq(game.padlocks(), 2);
@@ -45,7 +53,14 @@ contract GameEndToEnd2Test is GameBaseTest {
 
         // Step 2: CommonMan calls Secure Chest to add another padlock
         vm.prank(commonManPlayer);
-        game.secureChest(commonManPlayer);
+        params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.SecureChest,
+            actor: commonManPlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify chest state has changed
         assertEq(game.padlocks(), 3);
@@ -54,7 +69,14 @@ contract GameEndToEnd2Test is GameBaseTest {
 
         // Step 3: Wizard calls Arcane Seal to add a seal
         vm.prank(wizardPlayer);
-        game.arcaneSeal(wizardPlayer);
+        params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.ArcaneSeal,
+            actor: wizardPlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify chest state has changed
         assertEq(game.padlocks(), 3);
@@ -63,7 +85,14 @@ contract GameEndToEnd2Test is GameBaseTest {
 
         // Step 4: Sage calls Arcane Seal to add another seal
         vm.prank(sagePlayer);
-        game.arcaneSeal(sagePlayer);
+        params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.ArcaneSeal,
+            actor: sagePlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify chest state has changed (should be 3 padlocks, 3 seals)
         assertEq(game.padlocks(), 3);

@@ -16,10 +16,12 @@ contract GameEndToEndTest is GameBaseTest {
         joinAllPlayers();
 
         // Find the players with the required character types
-        artistPlayer = findPlayerWithCharacter(Game.CharacterType.Artist);
-        heroPlayer = findPlayerWithCharacter(Game.CharacterType.Hero);
-        wizardPlayer = findPlayerWithCharacter(Game.CharacterType.Wizard);
-        innocentPlayer = findPlayerWithCharacter(Game.CharacterType.Innocent);
+        artistPlayer = findPlayerWithCharacter(GameCore.CharacterType.Artist);
+        heroPlayer = findPlayerWithCharacter(GameCore.CharacterType.Hero);
+        wizardPlayer = findPlayerWithCharacter(GameCore.CharacterType.Wizard);
+        innocentPlayer = findPlayerWithCharacter(
+            GameCore.CharacterType.Innocent
+        );
 
         // After setting up the game but before calling any moves
         vm.warp(block.timestamp + 10 * 60 + 1); // Advance timestamp past the cooldown period
@@ -38,14 +40,28 @@ contract GameEndToEndTest is GameBaseTest {
 
         // Step 1: Artist creates a key
         vm.prank(artistPlayer);
-        game.forgeKey(artistPlayer);
+        GameMoves.MoveParams memory params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.ForgeKey,
+            actor: artistPlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify Artist has a key
         assertTrue(playerHasKeys(artistPlayer, 1));
 
         // Step 2: Artist gifts the key to Hero
         vm.prank(artistPlayer);
-        game.gift(artistPlayer, heroPlayer);
+        params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.Gift,
+            actor: artistPlayer,
+            targetPlayer: heroPlayer,
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify Hero has a key and Artist doesn't
         assertTrue(playerHasKeys(heroPlayer, 1));
@@ -53,7 +69,14 @@ contract GameEndToEndTest is GameBaseTest {
 
         // Step 3: Hero uses the key to unlock one padlock
         vm.prank(heroPlayer);
-        game.unlockChest(heroPlayer, false);
+        params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.UnlockChest,
+            actor: heroPlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify chest state has changed
         assertEq(game.padlocks(), 0);
@@ -61,14 +84,28 @@ contract GameEndToEndTest is GameBaseTest {
 
         // Step 4: Wizard conjures a staff
         vm.prank(wizardPlayer);
-        game.conjureStaff(wizardPlayer);
+        params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.ConjureStaff,
+            actor: wizardPlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify Wizard has a staff
         assertTrue(playerHasStaffs(wizardPlayer, 1));
 
         // Step 5: Wizard gifts the staff to Innocent
         vm.prank(wizardPlayer);
-        game.gift(wizardPlayer, innocentPlayer);
+        params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.Gift,
+            actor: wizardPlayer,
+            targetPlayer: innocentPlayer,
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify Innocent has a staff and Wizard doesn't
         assertTrue(playerHasStaffs(innocentPlayer, 1));
@@ -76,7 +113,14 @@ contract GameEndToEndTest is GameBaseTest {
 
         // Step 6: Innocent uses the staff to unseal the chest
         vm.prank(innocentPlayer);
-        game.unsealChest(innocentPlayer, false);
+        params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.UnsealChest,
+            actor: innocentPlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
 
         // Verify chest state has changed (should be 1 padlock, 0 seals)
         assertEq(game.padlocks(), 0);

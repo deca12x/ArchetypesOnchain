@@ -2,10 +2,13 @@
 pragma solidity ^0.8.19;
 
 import "forge-std/Test.sol";
-import "../src/Game.sol";
+import "../src/GameMoves.sol";
+import "../src/GameCore.sol";
+import "../src/GameLibrary.sol";
+import "../src/PlayerLibrary.sol";
 
 contract GameBaseTest is Test {
-    Game game;
+    GameMoves game;
     address[] players;
 
     // Set up test addresses using vm.addr instead of precompiled addresses
@@ -28,7 +31,7 @@ contract GameBaseTest is Test {
         // Deploy game contract as player1
         vm.startPrank(player1);
         vm.deal(player1, 1 ether);
-        game = new Game();
+        game = new GameMoves();
         vm.stopPrank();
 
         // Create player array
@@ -67,12 +70,20 @@ contract GameBaseTest is Test {
 
     // Helper to find a player with a specific character type
     function findPlayerWithCharacter(
-        Game.CharacterType charType
+        GameCore.CharacterType charType
     ) internal view returns (address) {
         for (uint8 i = 0; i < game.numPlayersJoined(); i++) {
             address playerAddr = game.gamePlayerAddresses(i);
-            (, Game.CharacterType character, , , , , bool hasJoined, ) = game
-                .playerData(playerAddr);
+            (
+                ,
+                GameCore.CharacterType character,
+                ,
+                ,
+                ,
+                ,
+                bool hasJoined,
+
+            ) = game.playerData(playerAddr);
 
             if (hasJoined && character == charType) {
                 return playerAddr;
@@ -84,8 +95,8 @@ contract GameBaseTest is Test {
     // Helper to get character type of a player
     function getCharacterType(
         address playerAddr
-    ) internal view returns (Game.CharacterType) {
-        (, Game.CharacterType character, , , , , bool hasJoined, ) = game
+    ) internal view returns (GameCore.CharacterType) {
+        (, GameCore.CharacterType character, , , , , bool hasJoined, ) = game
             .playerData(playerAddr);
         require(hasJoined, "Player has not joined");
         return character;

@@ -115,11 +115,23 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
+        // ForgeKey is MoveType 12, CreateEnchantedKey is MoveType 3
+        // We need to handle both the original item creation moves and ForgeKey
+
+        if (moveType == MoveType.ForgeKey) {
+            if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) return 0;
+
+            _modifyItem(actor, ITEM_KEY, 1);
+            emit GameAction(actor, address(0), 99, 0, 0); // KeyForged marker
+            return 1;
+        }
+
+        // Original logic for other item creation moves
+        uint8 idx = uint8(moveType) - uint8(MoveType.CreateEnchantedKey);
+
         // Optimized lookup arrays
         uint8[4] memory items = [ITEM_ENCHANTED_KEY, ITEM_STAFF, ITEM_KEY, 255];
         uint8[4] memory results = [1, 2, 3, 4];
-
-        uint8 idx = uint8(moveType) - uint8(MoveType.CreateEnchantedKey);
 
         if (idx == 2 && GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
             return 0;
