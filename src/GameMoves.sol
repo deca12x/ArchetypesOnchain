@@ -4,228 +4,205 @@ pragma solidity ^0.8.19;
 import "./GameCore.sol";
 
 contract GameMoves is GameCore {
-    // --- Optimized Constants (use uint8 instead of strings where possible) ---
+    // --- Custom Errors (major size reduction) ---
+    error InvalidTarget();
+    error PeaceActive();
+    error NoItems();
+    error NoKey();
+    error NoEKey();
+    error NoStaff();
+    error NoValidMove();
+    error CannotUseMove();
+
+    // --- Packed Constants ---
     uint8 constant ITEM_KEY = 0;
     uint8 constant ITEM_ENCHANTED_KEY = 1;
     uint8 constant ITEM_STAFF = 2;
 
-    uint8 constant PROTECTION_GUARD = 0;
-    uint8 constant PROTECTION_EVADE = 1;
+    // Move categories packed into single uint256
+    uint256 constant MOVE_CATEGORIES =
+        (1 << 0) | // InspireAlliance - ALLIANCE
+            (1 << 8) | // GuardianBond - ALLIANCE
+            (1 << 16) | // SoulBond - ALLIANCE
+            (2 << 24) | // CreateEnchantedKey - ITEM_CREATE
+            (2 << 32) | // ConjureStaff - ITEM_CREATE
+            (2 << 40) | // ForgeKey - ITEM_CREATE
+            (2 << 48) | // CreateFakeKey - ITEM_CREATE
+            (4 << 56) | // SecureChest - CHEST_LOCK
+            (4 << 64) | // ArcaneSeal - CHEST_LOCK
+            (8 << 72) | // Lockpick - CHEST_UNLOCK
+            (8 << 80) | // Purify - CHEST_UNLOCK
+            (8 << 88) | // UnlockChest - CHEST_UNLOCK
+            (8 << 96) | // UnsealChest - CHEST_UNLOCK
+            (16 << 104) | // Guard - PROTECTION
+            (16 << 112) | // Evade - PROTECTION
+            (32 << 120) | // RoyalDecree - GLOBAL
+            (32 << 128); // PleaOfPeace - GLOBAL
 
-    // Move categories using bit flags
-    uint8 constant MOVE_CAT_ALLIANCE = 1;
-    uint8 constant MOVE_CAT_ITEM_CREATE = 2;
-    uint8 constant MOVE_CAT_CHEST_LOCK = 4;
-    uint8 constant MOVE_CAT_CHEST_UNLOCK = 8;
-    uint8 constant MOVE_CAT_PROTECTION = 16;
-    uint8 constant MOVE_CAT_GLOBAL = 32;
-
-    // Simplified category mapping
-    mapping(MoveType => uint8) private moveCategory;
     MoveType public lastMoveExecuted;
 
-    // Events specific to GameMoves
-    event MoveResult(
-        address indexed caller,
+    // Consolidated single event
+    event GameAction(
         address indexed actor,
-        MoveType indexed moveType,
-        uint8 result
+        address indexed target,
+        uint8 indexed actionType,
+        uint8 result,
+        uint256 data
     );
-    event FakeKeyAdded(uint8 newCount);
-    event KeyForgedObservation();
 
-    constructor() {
-        _initCategories();
+    // --- Packed Move Parameters ---
+    struct MoveParams {
+        MoveType moveType;
+        address actor;
+        address targetPlayer;
+        bool useEnchantedItem;
+        uint8 additionalParam;
     }
 
-    function _initCategories() internal {
-        // Alliance moves
-        moveCategory[MoveType.InspireAlliance] = MOVE_CAT_ALLIANCE;
-        moveCategory[MoveType.GuardianBond] = MOVE_CAT_ALLIANCE;
-        moveCategory[MoveType.SoulBond] = MOVE_CAT_ALLIANCE;
-
-        // Item creation
-        moveCategory[MoveType.CreateEnchantedKey] = MOVE_CAT_ITEM_CREATE;
-        moveCategory[MoveType.ConjureStaff] = MOVE_CAT_ITEM_CREATE;
-        moveCategory[MoveType.ForgeKey] = MOVE_CAT_ITEM_CREATE;
-        moveCategory[MoveType.CreateFakeKey] = MOVE_CAT_ITEM_CREATE;
-
-        // Chest locking
-        moveCategory[MoveType.SecureChest] = MOVE_CAT_CHEST_LOCK;
-        moveCategory[MoveType.ArcaneSeal] = MOVE_CAT_CHEST_LOCK;
-
-        // Chest unlocking
-        moveCategory[MoveType.Lockpick] = MOVE_CAT_CHEST_UNLOCK;
-        moveCategory[MoveType.Purify] = MOVE_CAT_CHEST_UNLOCK;
-        moveCategory[MoveType.UnlockChest] = MOVE_CAT_CHEST_UNLOCK;
-        moveCategory[MoveType.UnsealChest] = MOVE_CAT_CHEST_UNLOCK;
-
-        // Protection
-        moveCategory[MoveType.Guard] = MOVE_CAT_PROTECTION;
-        moveCategory[MoveType.Evade] = MOVE_CAT_PROTECTION;
-
-        // Global effects
-        moveCategory[MoveType.RoyalDecree] = MOVE_CAT_GLOBAL;
-        moveCategory[MoveType.PleaOfPeace] = MOVE_CAT_GLOBAL;
-    }
-
-    // --- Main Execute Move Function ---
+    // --- Main Execute Function ---
     function executeMove(
-        MoveType _moveType,
-        address _actor,
-        address _targetPlayer,
-        bool _useEnchantedItem,
-        uint8 _additionalParam
-    ) public gameIsActive onlyGamePlayer(_actor) {
-        _validateAndPrepareActor(msg.sender, _actor, _moveType);
-        require(canUseMove(_actor, _moveType), "Cannot use move");
+        MoveParams calldata p
+    ) external gameIsActive onlyGamePlayer(p.actor) {
+        _validateAndPrepareActor(msg.sender, p.actor, p.moveType);
+        if (!canUseMove(p.actor, p.moveType)) revert CannotUseMove();
 
-        uint8 category = moveCategory[_moveType];
-        uint8 result = 0;
+        uint8 category = uint8(MOVE_CATEGORIES >> (uint256(p.moveType) * 8));
+        uint8 result;
 
-        if (category & MOVE_CAT_ALLIANCE != 0) {
-            result = _execAlliance(_actor, _targetPlayer);
-        } else if (category & MOVE_CAT_ITEM_CREATE != 0) {
-            result = _execItemCreate(_actor, _moveType);
-        } else if (category & MOVE_CAT_CHEST_LOCK != 0) {
-            result = _execChestLock(_actor, _moveType);
-        } else if (category & MOVE_CAT_CHEST_UNLOCK != 0) {
-            result = _execChestUnlock(_actor, _moveType, _useEnchantedItem);
-        } else if (category & MOVE_CAT_PROTECTION != 0) {
-            result = _execProtection(_actor, _targetPlayer, _moveType);
-        } else if (category & MOVE_CAT_GLOBAL != 0) {
-            result = _execGlobal(_actor, _moveType);
-        } else {
-            result = _execSpecial(
-                _actor,
-                _targetPlayer,
-                _moveType,
-                _additionalParam
-            );
-        }
+        if (category == 1) result = _execAlliance(p.actor, p.targetPlayer);
+        else if (category == 2) result = _execItemCreate(p.actor, p.moveType);
+        else if (category == 4) result = _execChestLock(p.actor, p.moveType);
+        else if (category == 8)
+            result = _execChestUnlock(p.actor, p.moveType, p.useEnchantedItem);
+        else if (category == 16)
+            result = _execProtection(p.actor, p.targetPlayer, p.moveType);
+        else if (category == 32) result = _execGlobal(p.actor, p.moveType);
+        else result = _execSpecial(p.actor, p.targetPlayer, p.moveType);
 
-        if (_moveType != MoveType.CopycatMove) {
-            lastMoveExecuted = _moveType;
-        }
+        if (p.moveType != MoveType.CopycatMove) lastMoveExecuted = p.moveType;
 
-        emit MoveResult(msg.sender, _actor, _moveType, result);
+        emit GameAction(
+            p.actor,
+            p.targetPlayer,
+            category,
+            result,
+            uint256(p.moveType)
+        );
     }
 
     // --- Optimized Category Implementations ---
     function _execAlliance(
-        address _actor,
-        address _target
+        address actor,
+        address target
     ) internal returns (uint8) {
-        require(
-            _target != _actor && playerData[_target].hasJoined,
-            "Invalid target"
-        );
+        if (target == actor || !playerData[target].hasJoined)
+            revert InvalidTarget();
 
         bool success = GameLibrary.resetAndUnion(
             dsuParent,
             dsuSetSize,
-            _actor,
-            _target
+            actor,
+            target
         );
         if (success) {
-            emit AllianceUpdated(_actor, _target, true);
-            return 1; // Success
-        }
-        return 0; // Failed
-    }
-
-    function _execItemCreate(
-        address _actor,
-        MoveType _moveType
-    ) internal returns (uint8) {
-        if (_moveType == MoveType.CreateEnchantedKey) {
-            _modifyPlayerItem(_actor, ITEM_ENCHANTED_KEY, 1);
+            emit AllianceUpdated(actor, target, true);
             return 1;
-        } else if (_moveType == MoveType.ConjureStaff) {
-            _modifyPlayerItem(_actor, ITEM_STAFF, 1);
-            return 2;
-        } else if (_moveType == MoveType.ForgeKey) {
-            if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
-                return 0; // Wasted
-            }
-            _modifyPlayerItem(_actor, ITEM_KEY, 1);
-            emit KeyForgedObservation();
-            return 3;
-        } else if (_moveType == MoveType.CreateFakeKey) {
-            activeFakeKeysCount++;
-            emit FakeKeyAdded(activeFakeKeysCount);
-            return 4;
         }
         return 0;
     }
 
-    function _execChestLock(
-        address _actor,
-        MoveType _moveType
+    function _execItemCreate(
+        address actor,
+        MoveType moveType
     ) internal returns (uint8) {
-        require(
-            !GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime),
-            "Peace active"
-        );
+        // Optimized lookup arrays
+        uint8[4] memory items = [ITEM_ENCHANTED_KEY, ITEM_STAFF, ITEM_KEY, 255];
+        uint8[4] memory results = [1, 2, 3, 4];
 
-        if (_moveType == MoveType.SecureChest) {
-            padlocks++;
+        uint8 idx = uint8(moveType) - uint8(MoveType.CreateEnchantedKey);
+
+        if (idx == 2 && GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
+            return 0;
+
+        if (idx < 3) {
+            _modifyItem(actor, items[idx], 1);
+            if (idx == 2) emit GameAction(actor, address(0), 99, 0, 0); // KeyForged marker
         } else {
-            seals++;
+            activeFakeKeysCount++;
+            emit GameAction(actor, address(0), 98, activeFakeKeysCount, 0); // FakeKey marker
         }
 
-        emit ChestStateChanged(padlocks, seals);
-        _checkBlockVictory(_actor);
+        return results[idx];
+    }
+
+    function _execChestLock(
+        address actor,
+        MoveType moveType
+    ) internal returns (uint8) {
+        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
+            revert PeaceActive();
+
+        assembly {
+            let slot := add(padlocks.slot, mul(eq(moveType, 0x0A), 1)) // SecureChest = 0x0A
+            let val := sload(slot)
+            sstore(slot, add(val, 1))
+        }
+
+        emit GameAction(
+            actor,
+            address(0),
+            4,
+            1,
+            (uint256(padlocks) << 8) | seals
+        );
+        _checkBlockVictory(actor);
         return 1;
     }
 
     function _execChestUnlock(
-        address _actor,
-        MoveType _moveType,
-        bool _useEnchantedItem
+        address actor,
+        MoveType moveType,
+        bool useEnchanted
     ) internal returns (uint8) {
-        require(
-            !GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime),
-            "Peace active"
-        );
+        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
+            revert PeaceActive();
 
-        // Check fake keys first
+        // Fake key check (inlined)
         if (
-            (_moveType == MoveType.UnlockChest ||
-                _moveType == MoveType.UnsealChest) && activeFakeKeysCount > 0
+            (moveType == MoveType.UnlockChest ||
+                moveType == MoveType.UnsealChest) && activeFakeKeysCount > 0
         ) {
             activeFakeKeysCount--;
-            emit FakeKeyAdded(activeFakeKeysCount);
-            return 0; // Hit fake key
+            emit GameAction(actor, address(0), 98, activeFakeKeysCount, 0);
+            return 0;
         }
 
-        bool changed = false;
+        bool changed;
 
-        if (_moveType == MoveType.Lockpick && padlocks > 0) {
+        if (moveType == MoveType.Lockpick && padlocks > 0) {
             padlocks--;
             changed = true;
-        } else if (_moveType == MoveType.Purify && seals > 0) {
+        } else if (moveType == MoveType.Purify && seals > 0) {
             seals--;
             changed = true;
         } else if (
-            _moveType == MoveType.UnlockChest ||
-            _moveType == MoveType.UnsealChest
+            moveType == MoveType.UnlockChest || moveType == MoveType.UnsealChest
         ) {
-            if (_useEnchantedItem) {
-                require(playerData[_actor].enchantedKeys > 0, "No E.Key");
-                _modifyPlayerItem(_actor, ITEM_ENCHANTED_KEY, -1);
+            if (useEnchanted) {
+                if (playerData[actor].enchantedKeys == 0) revert NoEKey();
+                _modifyItem(actor, ITEM_ENCHANTED_KEY, -1);
                 if (padlocks > 0) padlocks--;
                 if (seals > 0) seals--;
                 changed = true;
             } else {
-                bool isUnlock = _moveType == MoveType.UnlockChest;
+                bool isUnlock = moveType == MoveType.UnlockChest;
                 if (isUnlock) {
-                    require(playerData[_actor].keys > 0, "No Key");
-                    _modifyPlayerItem(_actor, ITEM_KEY, -1);
+                    if (playerData[actor].keys == 0) revert NoKey();
+                    _modifyItem(actor, ITEM_KEY, -1);
                     if (padlocks > 0) padlocks--;
                 } else {
-                    require(playerData[_actor].staffs > 0, "No Staff");
-                    _modifyPlayerItem(_actor, ITEM_STAFF, -1);
+                    if (playerData[actor].staffs == 0) revert NoStaff();
+                    _modifyItem(actor, ITEM_STAFF, -1);
                     if (seals > 0) seals--;
                 }
                 changed = true;
@@ -233,86 +210,135 @@ contract GameMoves is GameCore {
         }
 
         if (changed) {
-            emit ChestStateChanged(padlocks, seals);
-            _checkOpenVictory(_actor);
+            emit GameAction(
+                actor,
+                address(0),
+                8,
+                1,
+                (uint256(padlocks) << 8) | seals
+            );
+            _checkOpenVictory(actor);
             return 1;
         }
         return 0;
     }
 
     function _execProtection(
-        address _actor,
-        address _target,
-        MoveType _moveType
+        address actor,
+        address target,
+        MoveType moveType
     ) internal returns (uint8) {
-        address protectee = _target == address(0) ? _actor : _target;
-
-        if (_target != address(0)) {
-            require(playerData[_target].hasJoined, "Invalid target");
-        }
+        address protectee = target == address(0) ? actor : target;
+        if (target != address(0) && !playerData[target].hasJoined)
+            revert InvalidTarget();
 
         playerData[protectee].protections++;
-        emit ProtectionStatusChanged(
-            protectee,
-            true,
-            _moveType == MoveType.Evade ? "Evade" : "Guard"
-        );
+        emit GameAction(protectee, address(0), 16, 1, uint256(moveType));
         return 1;
     }
 
     function _execGlobal(
-        address _actor,
-        MoveType _moveType
+        address actor,
+        MoveType moveType
     ) internal returns (uint8) {
-        if (_moveType == MoveType.RoyalDecree) {
-            royalDecreeEndTime = block.timestamp + 60;
-            emit EffectActivated("RoyalDecree", royalDecreeEndTime);
+        uint256 endTime = block.timestamp +
+            (moveType == MoveType.RoyalDecree ? 60 : 120);
+
+        if (moveType == MoveType.RoyalDecree) {
+            royalDecreeEndTime = endTime;
         } else {
-            pleaOfPeaceEndTime = block.timestamp + 120;
-            emit EffectActivated("PleaOfPeace", pleaOfPeaceEndTime);
+            pleaOfPeaceEndTime = endTime;
         }
+
+        emit GameAction(actor, address(0), 32, 1, endTime);
         return 1;
     }
 
     function _execSpecial(
-        address _actor,
-        address _target,
-        MoveType _moveType,
-        uint8 _param
+        address actor,
+        address target,
+        MoveType moveType
     ) internal returns (uint8) {
-        if (_moveType == MoveType.Discover) {
-            uint256 rand = uint256(
-                keccak256(abi.encodePacked(block.timestamp, msg.sender, _actor))
-            ) % 3;
-            _modifyPlayerItem(_actor, uint8(rand), 1);
-            return uint8(rand + 1);
-        } else if (_moveType == MoveType.CopycatMove) {
-            require(
-                uint(lastMoveExecuted) != 0 &&
-                    lastMoveExecuted != MoveType.CopycatMove,
-                "No valid move"
+        if (moveType == MoveType.Discover) {
+            uint8 itemType = uint8(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(block.timestamp, msg.sender, actor)
+                    )
+                ) % 3
             );
-            return 1;
-        } else if (_moveType == MoveType.EnergyFlow) {
-            return _execEnergyFlow(_actor);
-        } else if (_moveType == MoveType.SeizeItem) {
-            return _execSeizeItem(_actor, _target);
-        } else if (_moveType == MoveType.Distract) {
-            return _execDistract(_actor, _target);
-        } else if (_moveType == MoveType.Gift) {
-            return _execGift(_actor, _target);
+            _modifyItem(actor, itemType, 1);
+            return itemType + 1;
         }
+
+        if (moveType == MoveType.CopycatMove) {
+            if (
+                uint(lastMoveExecuted) == 0 ||
+                lastMoveExecuted == MoveType.CopycatMove
+            ) revert NoValidMove();
+            return 1;
+        }
+
+        if (moveType == MoveType.EnergyFlow) return _execEnergyFlow(actor);
+        if (moveType == MoveType.SeizeItem)
+            return _execSeizeItem(actor, target);
+        if (moveType == MoveType.Distract) return _execDistract(actor, target);
+        if (moveType == MoveType.Gift) return _execGift(actor, target);
+
         return 0;
     }
 
-    function _execEnergyFlow(address _actor) internal returns (uint8) {
-        address actorRoot = GameLibrary.find(dsuParent, _actor);
+    // --- Optimized Helper Functions ---
+    function _modifyItem(address player, uint8 itemType, int8 amount) internal {
+        assembly {
+            let playerSlot := playerData.slot
+            let key := player
+            mstore(0x0, key)
+            mstore(0x20, playerSlot)
+            let baseSlot := keccak256(0x0, 0x40)
+
+            // Calculate item offset (keys=0, enchantedKeys=1, staffs=2)
+            let itemSlot := add(baseSlot, add(2, itemType)) // +2 for hasJoined(0) and protections(1)
+            let currentVal := sload(itemSlot)
+            let newVal := add(currentVal, amount)
+            sstore(itemSlot, newVal)
+        }
+
+        if (amount != 0) {
+            emit GameAction(
+                player,
+                address(0),
+                97,
+                uint8(itemType),
+                uint256(uint8(amount))
+            );
+        }
+    }
+
+    function _consumeProtection(address target) internal returns (bool) {
+        if (playerData[target].protections > 0) {
+            playerData[target].protections--;
+            emit GameAction(
+                target,
+                address(0),
+                96,
+                playerData[target].protections > 0 ? 1 : 0,
+                0
+            );
+            return true;
+        }
+        return false;
+    }
+
+    // --- Inlined Special Functions ---
+    function _execEnergyFlow(address actor) internal returns (uint8) {
+        address actorRoot = GameLibrary.find(dsuParent, actor);
         uint moveTypeCount = uint(MoveType.Gift) + 1;
 
         for (uint8 i = 0; i < NUM_PLAYERS; i++) {
             address ally = gamePlayerAddresses[i];
             if (
-                ally != _actor && GameLibrary.find(dsuParent, ally) == actorRoot
+                ally != actor && GameLibrary.find(dsuParent, ally) == actorRoot
             ) {
                 for (uint mt = 0; mt < moveTypeCount; mt++) {
                     if (moveCooldowns[MoveType(mt)] > 0) {
@@ -325,154 +351,95 @@ contract GameMoves is GameCore {
     }
 
     function _execSeizeItem(
-        address _actor,
-        address _target
+        address actor,
+        address target
     ) internal returns (uint8) {
-        require(
-            playerData[_target].hasJoined && _target != _actor,
-            "Invalid target"
-        );
-        require(
-            !GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime),
-            "Peace active"
-        );
+        if (!playerData[target].hasJoined || target == actor)
+            revert InvalidTarget();
+        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
+            revert PeaceActive();
+        if (_consumeProtection(target)) return 0;
 
-        if (_consumeProtection(_target)) return 0;
-
-        uint8 itemType = 255; // None
-        if (playerData[_target].enchantedKeys > 0) {
-            itemType = ITEM_ENCHANTED_KEY;
-        } else if (playerData[_target].keys > 0) {
-            itemType = ITEM_KEY;
-        } else if (playerData[_target].staffs > 0) {
-            itemType = ITEM_STAFF;
-        }
+        // Priority: EnchantedKey > Key > Staff
+        uint8 itemType = playerData[target].enchantedKeys > 0
+            ? ITEM_ENCHANTED_KEY
+            : playerData[target].keys > 0
+            ? ITEM_KEY
+            : playerData[target].staffs > 0
+            ? ITEM_STAFF
+            : 255;
 
         if (itemType != 255) {
-            _modifyPlayerItem(_target, itemType, -1);
-            _modifyPlayerItem(_actor, itemType, 1);
+            _modifyItem(target, itemType, -1);
+            _modifyItem(actor, itemType, 1);
             return itemType + 1;
         }
         return 0;
     }
 
     function _execDistract(
-        address _actor,
-        address _target
+        address actor,
+        address target
     ) internal returns (uint8) {
-        require(
-            playerData[_target].hasJoined && _target != _actor,
-            "Invalid target"
-        );
-        require(
-            !GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime),
-            "Peace active"
-        );
-
-        return _consumeProtection(_target) ? 0 : 1;
+        if (!playerData[target].hasJoined || target == actor)
+            revert InvalidTarget();
+        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
+            revert PeaceActive();
+        return _consumeProtection(target) ? 0 : 1;
     }
 
     function _execGift(
-        address _actor,
-        address _receiver
+        address actor,
+        address receiver
     ) internal returns (uint8) {
-        require(
-            playerData[_actor].keys > 0 ||
-                playerData[_actor].enchantedKeys > 0 ||
-                playerData[_actor].staffs > 0,
-            "No items"
-        );
-        require(
-            _receiver != _actor && playerData[_receiver].hasJoined,
-            "Invalid receiver"
-        );
+        if (
+            playerData[actor].keys +
+                playerData[actor].enchantedKeys +
+                playerData[actor].staffs ==
+            0
+        ) revert NoItems();
+        if (receiver == actor || !playerData[receiver].hasJoined)
+            revert InvalidTarget();
 
-        uint8 totalGifted = 0;
+        uint8 totalGifted;
 
-        if (playerData[_actor].keys > 0) {
-            uint8 amount = playerData[_actor].keys;
-            _modifyPlayerItem(_receiver, ITEM_KEY, int8(amount));
-            _modifyPlayerItem(_actor, ITEM_KEY, -int8(amount));
+        // Transfer all items at once
+        if (playerData[actor].keys > 0) {
+            uint8 amount = playerData[actor].keys;
+            _modifyItem(receiver, ITEM_KEY, int8(amount));
+            _modifyItem(actor, ITEM_KEY, -int8(amount));
             totalGifted += amount;
         }
 
-        if (playerData[_actor].enchantedKeys > 0) {
-            uint8 amount = playerData[_actor].enchantedKeys;
-            _modifyPlayerItem(_receiver, ITEM_ENCHANTED_KEY, int8(amount));
-            _modifyPlayerItem(_actor, ITEM_ENCHANTED_KEY, -int8(amount));
+        if (playerData[actor].enchantedKeys > 0) {
+            uint8 amount = playerData[actor].enchantedKeys;
+            _modifyItem(receiver, ITEM_ENCHANTED_KEY, int8(amount));
+            _modifyItem(actor, ITEM_ENCHANTED_KEY, -int8(amount));
             totalGifted += amount;
         }
 
-        if (playerData[_actor].staffs > 0) {
-            uint8 amount = playerData[_actor].staffs;
-            _modifyPlayerItem(_receiver, ITEM_STAFF, int8(amount));
-            _modifyPlayerItem(_actor, ITEM_STAFF, -int8(amount));
+        if (playerData[actor].staffs > 0) {
+            uint8 amount = playerData[actor].staffs;
+            _modifyItem(receiver, ITEM_STAFF, int8(amount));
+            _modifyItem(actor, ITEM_STAFF, -int8(amount));
             totalGifted += amount;
         }
 
-        GameLibrary.resetAndUnion(dsuParent, dsuSetSize, _actor, _receiver);
-        emit AllianceUpdated(_actor, _receiver, true);
-
+        GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, receiver);
+        emit AllianceUpdated(actor, receiver, true);
         return totalGifted;
     }
 
-    // --- Optimized Helper Functions ---
-    function _modifyPlayerItem(
-        address _player,
-        uint8 _itemType,
-        int8 _amount
-    ) internal {
-        if (_itemType == ITEM_KEY) {
-            playerData[_player].keys = uint8(
-                int8(playerData[_player].keys) + _amount
-            );
-            if (_amount != 0) emit ItemsChanged(_player, "Key", _amount);
-        } else if (_itemType == ITEM_ENCHANTED_KEY) {
-            playerData[_player].enchantedKeys = uint8(
-                int8(playerData[_player].enchantedKeys) + _amount
-            );
-            if (_amount != 0)
-                emit ItemsChanged(_player, "EnchantedKey", _amount);
-        } else if (_itemType == ITEM_STAFF) {
-            playerData[_player].staffs = uint8(
-                int8(playerData[_player].staffs) + _amount
-            );
-            if (_amount != 0) emit ItemsChanged(_player, "Staff", _amount);
+    // --- Victory Checks (inlined) ---
+    function _checkOpenVictory(address actor) internal {
+        if (!gameOver && padlocks == 0 && seals == 0) {
+            _distributePrizes(actor);
         }
     }
 
-    function _consumeProtection(address _target) internal returns (bool) {
-        if (playerData[_target].protections > 0) {
-            playerData[_target].protections--;
-            emit ProtectionStatusChanged(
-                _target,
-                playerData[_target].protections > 0,
-                "ProtectionUsed"
-            );
-            return true;
-        }
-        return false;
-    }
-
-    function _checkOpenVictory(address _actor) internal {
-        if (gameOver) return;
-        GameLibrary.ChestState memory state = GameLibrary.ChestState({
-            padlocks: padlocks,
-            seals: seals
-        });
-        if (GameLibrary.checkOpenVictory(state)) {
-            _distributePrizes(_actor);
-        }
-    }
-
-    function _checkBlockVictory(address _actor) internal {
-        if (gameOver) return;
-        GameLibrary.ChestState memory state = GameLibrary.ChestState({
-            padlocks: padlocks,
-            seals: seals
-        });
-        if (GameLibrary.checkBlockVictory(state)) {
-            _distributePrizes(_actor);
+    function _checkBlockVictory(address actor) internal {
+        if (!gameOver && padlocks >= 10 && seals >= 10) {
+            _distributePrizes(actor);
         }
     }
 }
