@@ -83,7 +83,6 @@ contract GameMoves is GameCore {
         MoveParams calldata p
     ) external gameIsActive onlyGamePlayer(p.actor) {
         _validateAndPrepareActor(msg.sender, p.actor, p.moveType);
-        if (!canUseMove(p.actor, p.moveType)) revert CannotUseMove();
 
         MoveCategory category = moveToCategoryMap[p.moveType];
         uint8 result;
@@ -125,8 +124,6 @@ contract GameMoves is GameCore {
         address target,
         MoveType moveType
     ) internal returns (uint8) {
-        _validateCharacterMove(actor, moveType);
-
         if (moveType == MoveType.Gift) {
             if (
                 playerData[actor].keys +
@@ -182,7 +179,6 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        _validateCharacterMove(actor, moveType);
         // Explicit validation first
         if (
             moveType != MoveType.CreateEnchantedKey &&
@@ -230,7 +226,6 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        _validateCharacterMove(actor, moveType);
         if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
             revert PeaceActive();
         }
@@ -265,7 +260,6 @@ contract GameMoves is GameCore {
         MoveType moveType,
         bool useEnchanted
     ) internal returns (uint8) {
-        _validateCharacterMove(actor, moveType);
         if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
             revert PeaceActive();
 
@@ -330,7 +324,6 @@ contract GameMoves is GameCore {
         address target,
         MoveType moveType
     ) internal returns (uint8) {
-        _validateCharacterMove(actor, moveType);
         address protectee = target == address(0) ? actor : target;
         if (target != address(0)) {
             if (!playerData[target].hasJoined) revert TargetNotPlayer();
@@ -345,7 +338,6 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        _validateCharacterMove(actor, moveType);
         // Explicit validation with revert
         if (
             moveType != MoveType.PleaOfPeace && moveType != MoveType.RoyalDecree
@@ -377,7 +369,6 @@ contract GameMoves is GameCore {
         address target,
         MoveType moveType
     ) internal returns (uint8) {
-        _validateCharacterMove(actor, moveType);
         if (moveType == MoveType.Discover) {
             uint8 itemType = uint8(
                 uint256(
@@ -582,15 +573,5 @@ contract GameMoves is GameCore {
         // Return 1 to indicate success
         // The actual copied move's effect will be handled by the next move
         return 1;
-    }
-
-    // Add this helper function at the top of GameMoves contract
-    function _validateCharacterMove(
-        address actor,
-        MoveType moveType
-    ) internal view {
-        if (!characterCanUseMove[playerData[actor].character][moveType]) {
-            revert CannotUseMove();
-        }
     }
 }

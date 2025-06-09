@@ -13,7 +13,6 @@ contract GameCore {
     error NoEKey();
     error NoStaff();
     error NoValidMove();
-    error CannotUseMove();
     error InvalidGlobalMove();
     error InvalidChestLockMove();
     error InvalidItemCreateMove();
@@ -500,5 +499,9 @@ contract GameCore {
             prizePerWinner,
             gameDuration
         );
+    }
+
+    function getDsuParent(address player) external view returns (address) {
+        return dsuParent[player];
     }
 }
