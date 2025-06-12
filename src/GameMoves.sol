@@ -101,7 +101,7 @@ contract GameMoves is GameCore {
         uint8 result;
 
         if (category == MoveCategory.ALLIANCE) {
-            result = _execAlliance(p.actor, p.targetPlayer, p.moveType);
+            result = _execAlliance(p.actor, p.moveType, p.targetPlayer);
         } else if (category == MoveCategory.ITEM_CREATE) {
             result = _execItemCreate(p.actor, p.moveType);
         } else if (category == MoveCategory.CHEST_LOCK) {
@@ -109,7 +109,7 @@ contract GameMoves is GameCore {
         } else if (category == MoveCategory.CHEST_UNLOCK) {
             result = _execChestUnlock(p.actor, p.moveType, p.useItem);
         } else if (category == MoveCategory.PROTECTION) {
-            result = _execProtection(p.actor, p.targetPlayer, p.moveType);
+            result = _execProtection(p.actor, p.moveType, p.targetPlayer);
         } else if (category == MoveCategory.GLOBAL) {
             result = _execGlobal(p.actor, p.moveType);
         } else if (category == MoveCategory.COPY) {
@@ -117,7 +117,7 @@ contract GameMoves is GameCore {
         } else if (category == MoveCategory.COOLDOWN) {
             result = _execCooldown(p.actor, p.moveType);
         } else if (category == MoveCategory.HARMFUL) {
-            result = _execHarmful(p.actor, p.targetPlayer, p.moveType);
+            result = _execHarmful(p.actor, p.moveType, p.targetPlayer);
         } else {
             revert InvalidMoveType();
         }
@@ -138,8 +138,8 @@ contract GameMoves is GameCore {
     // --- Optimized Category Implementations ---
     function _execAlliance(
         address actor,
-        address target,
-        MoveType moveType
+        MoveType moveType,
+        address target
     ) internal returns (uint8) {
         if (target == actor || !playerData[target].hasJoined)
             revert InvalidTarget();
@@ -256,13 +256,6 @@ contract GameMoves is GameCore {
         MoveType moveType,
         bool useEnchanted
     ) internal returns (uint8) {
-        // Fake key check
-        if (moveType == MoveType.UnlockChest && activeFakeKeysCount > 0) {
-            activeFakeKeysCount--;
-            emit GameAction(actor, address(0), 98, activeFakeKeysCount, 0);
-            return 0;
-        }
-
         if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
             revert PeaceActive();
 
@@ -280,15 +273,23 @@ contract GameMoves is GameCore {
             if (useEnchanted) {
                 if (playerData[actor].enchantedKeys == 0) revert NoEKey();
                 _modifyItem(actor, ITEM_ENCHANTED_KEY, -1);
-                if (padlocks > 0) padlocks--;
-                if (seals > 0) seals--;
-                changed = true;
+                if (activeFakeKeysCount > 0) {
+                    activeFakeKeysCount--;
+                } else {
+                    if (padlocks > 0) padlocks--;
+                    if (seals > 0) seals--;
+                    changed = true;
+                }
             } else {
                 bool isUnlock = moveType == MoveType.UnlockChest;
                 if (isUnlock) {
                     if (playerData[actor].keys == 0) revert NoKey();
                     _modifyItem(actor, ITEM_KEY, -1);
-                    if (padlocks > 0) padlocks--;
+                    if (activeFakeKeysCount > 0) {
+                        activeFakeKeysCount--;
+                    } else {
+                        if (padlocks > 0) padlocks--;
+                    }
                 } else {
                     if (playerData[actor].staffs == 0) revert NoStaff();
                     _modifyItem(actor, ITEM_STAFF, -1);
@@ -314,16 +315,13 @@ contract GameMoves is GameCore {
 
     function _execProtection(
         address actor,
-        address target,
-        MoveType moveType
+        MoveType moveType,
+        address target
     ) internal returns (uint8) {
-        address protectee = target == address(0) ? actor : target;
-        if (target != address(0)) {
-            if (!playerData[target].hasJoined) revert TargetNotPlayer();
-        }
-
-        playerData[protectee].protections++;
-        emit GameAction(protectee, address(0), 16, 1, uint256(moveType));
+        if (target != address(0) && !playerData[target].hasJoined)
+            revert TargetNotPlayer();
+        playerData[target].protections++;
+        emit GameAction(target, address(0), 16, 1, uint256(moveType));
         return 1;
     }
 
@@ -331,13 +329,6 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        // Explicit validation with revert
-        if (
-            moveType != MoveType.PleaOfPeace && moveType != MoveType.RoyalDecree
-        ) {
-            revert InvalidGlobalMove();
-        }
-
         uint256 endTime = block.timestamp +
             (moveType == MoveType.RoyalDecree ? 60 : 120);
 
@@ -393,8 +384,8 @@ contract GameMoves is GameCore {
 
     function _execHarmful(
         address actor,
-        address target,
-        MoveType moveType
+        MoveType moveType,
+        address target
     ) internal returns (uint8) {
         // TODO: Implement harmful logic
     }
