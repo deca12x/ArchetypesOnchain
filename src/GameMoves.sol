@@ -12,13 +12,15 @@ contract GameMoves is GameCore {
 
     // --- Move Categories ---
     enum MoveCategory {
-        NONE, // 0
-        ALLIANCE, // 1
-        ITEM_CREATE, // 2
-        CHEST_LOCK, // 3
-        CHEST_UNLOCK, // 4
-        PROTECTION, // 5
-        GLOBAL // 6
+        ALLIANCE, // 0
+        ITEM_CREATE, // 1
+        CHEST_LOCK, // 2
+        CHEST_UNLOCK, // 3
+        PROTECTION, // 4
+        GLOBAL, // 5
+        COPY, // 6
+        COOLDOWN, // 7
+        HARMFUL // 8
     }
 
     // Mapping of moves to their categories
@@ -40,7 +42,7 @@ contract GameMoves is GameCore {
         MoveType moveType;
         address actor;
         address targetPlayer;
-        bool useEnchantedItem;
+        bool useItem;
         uint8 additionalParam;
     }
 
@@ -57,7 +59,7 @@ contract GameMoves is GameCore {
             .ITEM_CREATE;
         moveToCategoryMap[MoveType.ConjureStaff] = MoveCategory.ITEM_CREATE;
         moveToCategoryMap[MoveType.ForgeKey] = MoveCategory.ITEM_CREATE;
-        moveToCategoryMap[MoveType.CreateFakeKey] = MoveCategory.ITEM_CREATE;
+        moveToCategoryMap[MoveType.Discover] = MoveCategory.ITEM_CREATE;
 
         // Chest locking moves
         moveToCategoryMap[MoveType.SecureChest] = MoveCategory.CHEST_LOCK;
@@ -76,6 +78,17 @@ contract GameMoves is GameCore {
         // Global effect moves
         moveToCategoryMap[MoveType.RoyalDecree] = MoveCategory.GLOBAL;
         moveToCategoryMap[MoveType.PleaOfPeace] = MoveCategory.GLOBAL;
+
+        // Copy moves
+        moveToCategoryMap[MoveType.CopycatMove] = MoveCategory.COPY;
+
+        // Cooldown moves
+        moveToCategoryMap[MoveType.EnergyFlow] = MoveCategory.COOLDOWN;
+
+        // Harmful moves
+        moveToCategoryMap[MoveType.SeizeItem] = MoveCategory.HARMFUL;
+        moveToCategoryMap[MoveType.Distract] = MoveCategory.HARMFUL;
+        moveToCategoryMap[MoveType.CreateFakeKey] = MoveCategory.HARMFUL;
     }
 
     // --- Main Execute Function ---
@@ -87,8 +100,6 @@ contract GameMoves is GameCore {
         MoveCategory category = moveToCategoryMap[p.moveType];
         uint8 result;
 
-        if (category == MoveCategory.NONE) revert InvalidMoveType();
-
         if (category == MoveCategory.ALLIANCE) {
             result = _execAlliance(p.actor, p.targetPlayer, p.moveType);
         } else if (category == MoveCategory.ITEM_CREATE) {
@@ -96,13 +107,19 @@ contract GameMoves is GameCore {
         } else if (category == MoveCategory.CHEST_LOCK) {
             result = _execChestLock(p.actor, p.moveType);
         } else if (category == MoveCategory.CHEST_UNLOCK) {
-            result = _execChestUnlock(p.actor, p.moveType, p.useEnchantedItem);
+            result = _execChestUnlock(p.actor, p.moveType, p.useItem);
         } else if (category == MoveCategory.PROTECTION) {
             result = _execProtection(p.actor, p.targetPlayer, p.moveType);
         } else if (category == MoveCategory.GLOBAL) {
             result = _execGlobal(p.actor, p.moveType);
+        } else if (category == MoveCategory.COPY) {
+            result = _execCopy(p.actor, p.moveType);
+        } else if (category == MoveCategory.COOLDOWN) {
+            result = _execCooldown(p.actor, p.moveType);
+        } else if (category == MoveCategory.HARMFUL) {
+            result = _execHarmful(p.actor, p.targetPlayer, p.moveType);
         } else {
-            result = _execSpecial(p.actor, p.targetPlayer, p.moveType);
+            revert InvalidMoveType();
         }
 
         if (p.moveType != MoveType.CopycatMove) {
@@ -124,6 +141,16 @@ contract GameMoves is GameCore {
         address target,
         MoveType moveType
     ) internal returns (uint8) {
+        if (
+            moveType != MoveType.InspireAlliance &&
+            moveType != MoveType.GuardianBond &&
+            moveType != MoveType.SoulBond &&
+            moveType != MoveType.Gift
+        ) {
+            revert InvalidAllianceMove();
+        }
+        if (target == actor || !playerData[target].hasJoined)
+            revert InvalidTarget();
         if (moveType == MoveType.Gift) {
             if (
                 playerData[actor].keys +
@@ -131,9 +158,6 @@ contract GameMoves is GameCore {
                     playerData[actor].staffs ==
                 0
             ) revert NoItems();
-            if (target == actor || !playerData[target].hasJoined)
-                revert InvalidTarget();
-
             uint8 totalGifted;
             if (playerData[actor].keys > 0) {
                 uint8 amount = playerData[actor].keys;
@@ -158,9 +182,6 @@ contract GameMoves is GameCore {
             emit AllianceUpdated(actor, target, true);
             return totalGifted;
         } else {
-            if (target == actor || !playerData[target].hasJoined)
-                revert InvalidTarget();
-
             bool success = GameLibrary.resetAndUnion(
                 dsuParent,
                 dsuSetSize,
@@ -226,6 +247,13 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
+        // Explicit validation first
+        if (
+            moveType != MoveType.SecureChest && moveType != MoveType.ArcaneSeal
+        ) {
+            revert InvalidChestLockMove();
+        }
+
         if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
             revert PeaceActive();
         }
@@ -364,7 +392,7 @@ contract GameMoves is GameCore {
         return 1;
     }
 
-    function _execSpecial(
+    function _execCopy(
         address actor,
         address target,
         MoveType moveType
@@ -389,6 +417,21 @@ contract GameMoves is GameCore {
         if (moveType == MoveType.Gift) return _execGift(actor, target);
 
         return 0;
+    }
+
+    function _execCooldown(
+        address actor,
+        MoveType moveType
+    ) internal returns (uint8) {
+        // TODO: Implement cooldown logic
+    }
+
+    function _execHarmful(
+        address actor,
+        address target,
+        MoveType moveType
+    ) internal returns (uint8) {
+        // TODO: Implement harmful logic
     }
 
     // --- Optimized Helper Functions ---
@@ -573,5 +616,10 @@ contract GameMoves is GameCore {
         // Return 1 to indicate success
         // The actual copied move's effect will be handled by the next move
         return 1;
+    }
+
+    function getPlayerKeys(address player) public view returns (uint8) {
+        // Logic to return the number of keys a player has
+        return playerData[player].keys;
     }
 }

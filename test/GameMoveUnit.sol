@@ -99,4 +99,51 @@ contract GameMoveUnitTests is GameBaseTest {
             "Hero and Explorer should be in the same alliance after inactivity"
         );
     }
+
+    function testDiscover() public {
+        // Step 1: Explorer calls move and it passes
+        vm.prank(explorerPlayer);
+        GameMoves.MoveParams memory params = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.Discover,
+            actor: explorerPlayer,
+            targetPlayer: address(0),
+            useEnchantedItem: false,
+            additionalParam: 0
+        });
+        game.executeMove(params);
+
+        // Step 2: Explorer now has 1 object (log what object it is)
+        uint8 firstItem = game.getPlayerKeys(explorerPlayer);
+        console.log("Explorer's first item:", firstItem);
+
+        // Step 3: 4 min later Explorer calls move and it fails (due to cooldown period)
+        vm.warp(block.timestamp + 4 * 60);
+        vm.prank(explorerPlayer);
+        vm.expectRevert(GameCore.MoveOnCooldown.selector);
+        game.executeMove(params);
+
+        // Step 4: 2 min later Explorer calls move and it passes (cooldown period passed)
+        vm.warp(block.timestamp + 2 * 60);
+        vm.prank(explorerPlayer);
+        game.executeMove(params);
+
+        // Step 5: Explorer now has two objects (log what objects they are)
+        uint8 secondItem = game.getPlayerKeys(explorerPlayer);
+        console.log("Explorer's second item:", secondItem);
+
+        // Step 6: 6 min later Innocent calls move and it fails (only the Explorer can call Discover)
+        vm.warp(block.timestamp + 6 * 60);
+        vm.prank(innocentPlayer);
+        vm.expectRevert(GameCore.InvalidMoveType.selector);
+        game.executeMove(params);
+
+        // Step 7: 2 min later Innocent calls move and it passes (Explorer considered idle since last move occurred 8 min ago and IDLE_PLAYER_LIMIT is 7 min)
+        vm.warp(block.timestamp + 2 * 60);
+        vm.prank(innocentPlayer);
+        game.executeMove(params);
+
+        // Step 8: Innocent now has 1 object (log what object it is)
+        uint8 innocentItem = game.getPlayerKeys(innocentPlayer);
+        console.log("Innocent's item:", innocentItem);
+    }
 }

@@ -13,13 +13,22 @@ contract GameCore {
     error NoEKey();
     error NoStaff();
     error NoValidMove();
-    error InvalidGlobalMove();
-    error InvalidChestLockMove();
+
+    error InvalidMoveType();
+    error InvalidAllianceMove();
     error InvalidItemCreateMove();
+    error InvalidChestLockMove();
+    error InvalidChestUnlockMove();
+    error InvalidProtectionMove();
+    error InvalidGlobalMove();
+    error InvalidCopyMove();
+    error InvalidCooldownMove();
+    error InvalidHarmfulMove();
+
     error InsufficientKeys();
     error InsufficientEnchantedKeys();
     error InsufficientStaffs();
-    error InvalidMoveType();
+
     error NotAPlayer(address player);
     error PlayerNotInactive();
     error MoveOnCooldown();
