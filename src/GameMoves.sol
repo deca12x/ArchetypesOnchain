@@ -141,14 +141,6 @@ contract GameMoves is GameCore {
         address target,
         MoveType moveType
     ) internal returns (uint8) {
-        if (
-            moveType != MoveType.InspireAlliance &&
-            moveType != MoveType.GuardianBond &&
-            moveType != MoveType.SoulBond &&
-            moveType != MoveType.Gift
-        ) {
-            revert InvalidAllianceMove();
-        }
         if (target == actor || !playerData[target].hasJoined)
             revert InvalidTarget();
         if (moveType == MoveType.Gift) {
@@ -200,16 +192,6 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        // Explicit validation first
-        if (
-            moveType != MoveType.CreateEnchantedKey &&
-            moveType != MoveType.ConjureStaff &&
-            moveType != MoveType.ForgeKey &&
-            moveType != MoveType.CreateFakeKey
-        ) {
-            revert InvalidItemCreateMove();
-        }
-
         uint8 itemType;
         uint8 result;
         bool isFakeKey = false;
@@ -247,22 +229,8 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        // Explicit validation first
-        if (
-            moveType != MoveType.SecureChest && moveType != MoveType.ArcaneSeal
-        ) {
-            revert InvalidChestLockMove();
-        }
-
         if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
             revert PeaceActive();
-        }
-
-        // Explicit validation with revert
-        if (
-            moveType != MoveType.SecureChest && moveType != MoveType.ArcaneSeal
-        ) {
-            revert InvalidChestLockMove();
         }
 
         if (moveType == MoveType.SecureChest) {
@@ -288,18 +256,15 @@ contract GameMoves is GameCore {
         MoveType moveType,
         bool useEnchanted
     ) internal returns (uint8) {
-        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
-            revert PeaceActive();
-
-        // Fake key check (inlined)
-        if (
-            (moveType == MoveType.UnlockChest ||
-                moveType == MoveType.UnsealChest) && activeFakeKeysCount > 0
-        ) {
+        // Fake key check
+        if (moveType == MoveType.UnlockChest && activeFakeKeysCount > 0) {
             activeFakeKeysCount--;
             emit GameAction(actor, address(0), 98, activeFakeKeysCount, 0);
             return 0;
         }
+
+        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
+            revert PeaceActive();
 
         bool changed;
 
