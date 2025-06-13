@@ -45,6 +45,9 @@ contract GameMoves is GameCore {
         uint8 additionalParam;
     }
 
+    // Add this state variable at the top of the contract with other state variables
+    bool private copyOngoing;
+
     // Initialize this in the constructor
     constructor() {
         // Alliance moves
@@ -91,9 +94,12 @@ contract GameMoves is GameCore {
     }
 
     // --- Main Execute Function ---
-    function executeMove(
-        MoveParams calldata p
-    ) external gameIsActive onlyGamePlayer(p.actor) {
+    function executeMove(MoveParams calldata p) external gameIsActive {
+        // If copyOngoing is true, allow any player to call the move
+        if (!copyOngoing) {
+            onlyGamePlayer(p.actor);
+        }
+
         _validateAndPrepareActor(msg.sender, p.actor, p.moveType);
 
         MoveCategory category = moveToCategoryMap[p.moveType];
@@ -121,6 +127,7 @@ contract GameMoves is GameCore {
             revert InvalidMoveType();
         }
 
+        // Update lastMoveExecuted for all moves except CopycatMove
         if (p.moveType != MoveType.CopycatMove) {
             lastMoveExecuted = p.moveType;
         }
@@ -350,7 +357,45 @@ contract GameMoves is GameCore {
         MoveType moveType,
         bool useItem
     ) internal returns (uint8) {
-        // TODO: Implement copy logic
+        if (
+            uint(lastMoveExecuted) == 0 ||
+            lastMoveExecuted == MoveType.CopycatMove
+        ) {
+            revert NoValidMove();
+        }
+
+        // Set copyOngoing to true
+        copyOngoing = true;
+
+        // Get the category of the move to copy
+        MoveCategory category = moveToCategoryMap[lastMoveExecuted];
+        uint8 result;
+
+        // Execute the copied move
+        if (category == MoveCategory.ALLIANCE) {
+            result = _execAlliance(actor, lastMoveExecuted, target);
+        } else if (category == MoveCategory.ITEM_CREATE) {
+            result = _execItemCreate(actor, lastMoveExecuted);
+        } else if (category == MoveCategory.CHEST_LOCK) {
+            result = _execChestLock(actor, lastMoveExecuted);
+        } else if (category == MoveCategory.CHEST_UNLOCK) {
+            result = _execChestUnlock(actor, lastMoveExecuted, useItem);
+        } else if (category == MoveCategory.PROTECTION) {
+            result = _execProtection(actor, lastMoveExecuted, target);
+        } else if (category == MoveCategory.GLOBAL) {
+            result = _execGlobal(actor, lastMoveExecuted);
+        } else if (category == MoveCategory.COOLDOWN) {
+            result = _execCooldown(actor, lastMoveExecuted);
+        } else if (category == MoveCategory.HARMFUL) {
+            result = _execHarmful(actor, lastMoveExecuted, target);
+        } else {
+            revert InvalidMoveType();
+        }
+
+        // Set copyOngoing back to false
+        copyOngoing = false;
+
+        return result;
     }
 
     function _execCooldown(
@@ -527,21 +572,6 @@ contract GameMoves is GameCore {
         if (!gameOver && padlocks >= 3 && seals >= 3) {
             _distributePrizes(actor);
         }
-    }
-
-    function _execCopycatMove(
-        address /* actor */ // Parameter commented out but kept for consistency in function signature
-    ) internal view returns (uint8) {
-        if (
-            uint(lastMoveExecuted) == 0 ||
-            lastMoveExecuted == MoveType.CopycatMove
-        ) {
-            revert NoValidMove();
-        }
-
-        // Return 1 to indicate success
-        // The actual copied move's effect will be handled by the next move
-        return 1;
     }
 
     function getPlayerKeys(address player) public view returns (uint8) {
