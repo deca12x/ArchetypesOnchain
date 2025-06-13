@@ -97,7 +97,7 @@ contract GameMoves is GameCore {
     function executeMove(MoveParams calldata p) external gameIsActive {
         // If copyOngoing is true, allow any player to call the move
         if (!copyOngoing) {
-            onlyGamePlayer(p.actor);
+            require(playerData[p.actor].hasJoined, "Not a game player");
         }
 
         _validateAndPrepareActor(msg.sender, p.actor, p.moveType);
@@ -114,13 +114,13 @@ contract GameMoves is GameCore {
         } else if (category == MoveCategory.CHEST_UNLOCK) {
             result = _execChestUnlock(p.actor, p.moveType, p.useItem);
         } else if (category == MoveCategory.PROTECTION) {
-            result = _execProtection(p.actor, p.moveType, p.targetPlayer);
+            result = _execProtection(p.targetPlayer);
         } else if (category == MoveCategory.GLOBAL) {
-            result = _execGlobal(p.actor, p.moveType);
+            result = _execGlobal(p.moveType);
         } else if (category == MoveCategory.COPY) {
-            result = _execCopy(p.actor, p.moveType, p.targetPlayer, p.useItem);
+            result = _execCopy(p.actor, p.targetPlayer, p.useItem);
         } else if (category == MoveCategory.COOLDOWN) {
-            result = _execCooldown(p.actor, p.moveType);
+            result = _execCooldown(p.actor);
         } else if (category == MoveCategory.HARMFUL) {
             result = _execHarmful(p.actor, p.moveType, p.targetPlayer);
         } else {
@@ -357,21 +357,14 @@ contract GameMoves is GameCore {
         return 0;
     }
 
-    function _execProtection(
-        address actor,
-        MoveType moveType,
-        address target
-    ) internal returns (uint8) {
+    function _execProtection(address target) internal returns (uint8) {
         if (target != address(0) && !playerData[target].hasJoined)
             revert TargetNotPlayer();
         playerData[target].protections++;
         return 1;
     }
 
-    function _execGlobal(
-        address actor,
-        MoveType moveType
-    ) internal returns (uint8) {
+    function _execGlobal(MoveType moveType) internal returns (uint8) {
         if (moveType == MoveType.RoyalDecree) {
             royalDecreeEndTime = block.timestamp + 60;
         } else {
@@ -384,7 +377,6 @@ contract GameMoves is GameCore {
     function _execCopy(
         address actor,
         address target,
-        MoveType moveType,
         bool useItem
     ) internal returns (uint8) {
         if (
@@ -411,11 +403,11 @@ contract GameMoves is GameCore {
         } else if (category == MoveCategory.CHEST_UNLOCK) {
             result = _execChestUnlock(actor, lastMoveExecuted, useItem);
         } else if (category == MoveCategory.PROTECTION) {
-            result = _execProtection(actor, lastMoveExecuted, target);
+            result = _execProtection(target);
         } else if (category == MoveCategory.GLOBAL) {
-            result = _execGlobal(actor, lastMoveExecuted);
+            result = _execGlobal(lastMoveExecuted);
         } else if (category == MoveCategory.COOLDOWN) {
-            result = _execCooldown(actor, lastMoveExecuted);
+            result = _execCooldown(actor);
         } else if (category == MoveCategory.HARMFUL) {
             result = _execHarmful(actor, lastMoveExecuted, target);
         } else {
@@ -428,10 +420,7 @@ contract GameMoves is GameCore {
         return result;
     }
 
-    function _execCooldown(
-        address actor,
-        MoveType moveType
-    ) internal returns (uint8) {
+    function _execCooldown(address actor) internal returns (uint8) {
         address actorRoot = GameLibrary.find(dsuParent, actor);
         uint moveTypeCount = uint(MoveType.Gift) + 1;
 

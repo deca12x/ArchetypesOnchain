@@ -169,10 +169,6 @@ contract GameCore {
     event EffectActivated(string effectName, uint256 endTime);
 
     // Modifiers
-    modifier onlyGamePlayer(address _player) {
-        require(playerData[_player].hasJoined, "Not a game player");
-        _;
-    }
 
     modifier gameIsActive() {
         require(gameStarted, "Game not started");
