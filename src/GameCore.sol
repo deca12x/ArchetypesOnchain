@@ -2,7 +2,6 @@
 pragma solidity ^0.8.19;
 
 import "./GameLibrary.sol";
-import "./PlayerLibrary.sol";
 
 contract GameCore {
     // --- Custom Errors ---
@@ -92,6 +91,7 @@ contract GameCore {
         mapping(uint256 => uint256) lastMoveTimestamp;
         bool hasJoined;
         uint256 inactivityTimestamp;
+        bool distracted;
     }
 
     // Game state variables
@@ -266,34 +266,77 @@ contract GameCore {
 
     // Initialize cooldowns
     function _initializeCooldowns() internal {
-        // Unique moves (4-5 minutes)
-        moveCooldowns[MoveType.InspireAlliance] = 4 * 60; // Hero
-        moveCooldowns[MoveType.Discover] = 5 * 60; // Explorer
-        moveCooldowns[MoveType.Purify] = 5 * 60; // Innocent
-        moveCooldowns[MoveType.CreateEnchantedKey] = 5 * 60; // Artist
-        moveCooldowns[MoveType.RoyalDecree] = 5 * 60; // Ruler
-        moveCooldowns[MoveType.GuardianBond] = 4 * 60; // Caregiver
-        moveCooldowns[MoveType.CopycatMove] = 5 * 60; // CommonMan
-        moveCooldowns[MoveType.CreateFakeKey] = 5 * 60; // Joker
-        moveCooldowns[MoveType.ConjureStaff] = 5 * 60; // Wizard
-        moveCooldowns[MoveType.Lockpick] = 5 * 60; // Outlaw
-        moveCooldowns[MoveType.SoulBond] = 4 * 60; // Lover
-        moveCooldowns[MoveType.EnergyFlow] = 5 * 60; // Sage
+        // Hero moves
+        moveCooldowns[MoveType.InspireAlliance] = 4 * 60; // 4 min
+        moveCooldowns[MoveType.Guard] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.UnlockChest] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
 
-        // Shared moves (2-3 minutes)
-        moveCooldowns[MoveType.ForgeKey] = 3 * 60;
-        moveCooldowns[MoveType.SecureChest] = 3 * 60;
-        moveCooldowns[MoveType.ArcaneSeal] = 3 * 60;
-        moveCooldowns[MoveType.SeizeItem] = 2 * 60;
-        moveCooldowns[MoveType.Distract] = 2 * 60;
-        moveCooldowns[MoveType.Guard] = 3 * 60;
-        moveCooldowns[MoveType.Evade] = 3 * 60;
-        moveCooldowns[MoveType.PleaOfPeace] = 5 * 60;
+        // Explorer moves
+        moveCooldowns[MoveType.Discover] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.Evade] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.Guard] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
 
-        // No cooldown for these moves
-        moveCooldowns[MoveType.UnlockChest] = 0;
-        moveCooldowns[MoveType.UnsealChest] = 0;
-        moveCooldowns[MoveType.Gift] = 3 * 60;
+        // Innocent moves
+        moveCooldowns[MoveType.Purify] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.PleaOfPeace] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.UnsealChest] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Artist moves
+        moveCooldowns[MoveType.CreateEnchantedKey] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.ForgeKey] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.Evade] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Ruler moves
+        moveCooldowns[MoveType.RoyalDecree] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.SecureChest] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.SeizeItem] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Caregiver moves
+        moveCooldowns[MoveType.GuardianBond] = 4 * 60; // 4 min
+        moveCooldowns[MoveType.Guard] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.PleaOfPeace] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Common Man moves
+        moveCooldowns[MoveType.CopycatMove] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.SecureChest] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.Distract] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Joker moves
+        moveCooldowns[MoveType.CreateFakeKey] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.SeizeItem] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.Distract] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Wizard moves
+        moveCooldowns[MoveType.ConjureStaff] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.ArcaneSeal] = 4 * 60; // 4 min
+        moveCooldowns[MoveType.ForgeKey] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Outlaw moves
+        moveCooldowns[MoveType.Lockpick] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.SeizeItem] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.Evade] = 3 * 60; // 3 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Lover moves
+        moveCooldowns[MoveType.SoulBond] = 4 * 60; // 4 min
+        moveCooldowns[MoveType.Distract] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.UnlockChest] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
+
+        // Sage moves
+        moveCooldowns[MoveType.EnergyFlow] = 5 * 60; // 5 min
+        moveCooldowns[MoveType.UnsealChest] = 2 * 60; // 2 min
+        moveCooldowns[MoveType.ArcaneSeal] = 4 * 60; // 4 min
+        moveCooldowns[MoveType.Gift] = 0; // No cooldown
     }
 
     // Initialize character assignments with pseudo-random shuffle

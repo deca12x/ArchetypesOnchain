@@ -2,7 +2,6 @@
 pragma solidity ^0.8.19;
 
 import "./GameCore.sol";
-import "./PlayerLibrary.sol";
 
 contract GameMoves is GameCore {
     // --- Packed Constants ---
@@ -113,7 +112,7 @@ contract GameMoves is GameCore {
         } else if (category == MoveCategory.GLOBAL) {
             result = _execGlobal(p.actor, p.moveType);
         } else if (category == MoveCategory.COPY) {
-            result = _execCopy(p.actor, p.moveType);
+            result = _execCopy(p.actor, p.moveType, p.targetPlayer, p.useItem);
         } else if (category == MoveCategory.COOLDOWN) {
             result = _execCooldown(p.actor, p.moveType);
         } else if (category == MoveCategory.HARMFUL) {
@@ -143,6 +142,7 @@ contract GameMoves is GameCore {
     ) internal returns (uint8) {
         if (target == actor || !playerData[target].hasJoined)
             revert InvalidTarget();
+
         if (moveType == MoveType.Gift) {
             if (
                 playerData[actor].keys +
@@ -150,29 +150,31 @@ contract GameMoves is GameCore {
                     playerData[actor].staffs ==
                 0
             ) revert NoItems();
-            uint8 totalGifted;
+
+            // Create array of available items
+            uint8[] memory availableItems = new uint8[](3);
+            uint8 itemCount = 0;
+
             if (playerData[actor].keys > 0) {
-                uint8 amount = playerData[actor].keys;
-                _modifyItem(target, ITEM_KEY, int8(amount));
-                _modifyItem(actor, ITEM_KEY, -int8(amount));
-                totalGifted += amount;
+                availableItems[itemCount++] = ITEM_KEY;
             }
             if (playerData[actor].enchantedKeys > 0) {
-                uint8 amount = playerData[actor].enchantedKeys;
-                _modifyItem(target, ITEM_ENCHANTED_KEY, int8(amount));
-                _modifyItem(actor, ITEM_ENCHANTED_KEY, -int8(amount));
-                totalGifted += amount;
+                availableItems[itemCount++] = ITEM_ENCHANTED_KEY;
             }
             if (playerData[actor].staffs > 0) {
-                uint8 amount = playerData[actor].staffs;
-                _modifyItem(target, ITEM_STAFF, int8(amount));
-                _modifyItem(actor, ITEM_STAFF, -int8(amount));
-                totalGifted += amount;
+                availableItems[itemCount++] = ITEM_STAFF;
             }
+
+            // Select one random item to gift
+            uint8 selectedItem = _selectRandomItem(availableItems);
+
+            // Transfer the selected item
+            _modifyItem(actor, selectedItem, -1);
+            _modifyItem(target, selectedItem, 1);
 
             GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, target);
             emit AllianceUpdated(actor, target, true);
-            return totalGifted;
+            return selectedItem + 1;
         } else {
             bool success = GameLibrary.resetAndUnion(
                 dsuParent,
@@ -194,7 +196,6 @@ contract GameMoves is GameCore {
     ) internal returns (uint8) {
         uint8 itemType;
         uint8 result;
-        bool isFakeKey = false;
 
         if (moveType == MoveType.CreateEnchantedKey) {
             itemType = ITEM_ENCHANTED_KEY;
@@ -209,19 +210,17 @@ contract GameMoves is GameCore {
             }
             itemType = ITEM_KEY;
             result = 1;
-        } else {
-            // Must be CreateFakeKey due to validation above
-            isFakeKey = true;
-            result = 1;
+        } else if (moveType == MoveType.Discover) {
+            // For Discover, randomly select one of the three items
+            uint8[] memory items = new uint8[](3);
+            items[0] = ITEM_KEY;
+            items[1] = ITEM_ENCHANTED_KEY;
+            items[2] = ITEM_STAFF;
+            itemType = _selectRandomItem(items);
+            result = itemType + 1;
         }
 
-        if (isFakeKey) {
-            activeFakeKeysCount++;
-            emit GameAction(actor, address(0), 98, activeFakeKeysCount, 0);
-        } else {
-            _modifyItem(actor, itemType, 1);
-        }
-
+        _modifyItem(actor, itemType, 1);
         return result;
     }
 
@@ -329,13 +328,10 @@ contract GameMoves is GameCore {
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        uint256 endTime = block.timestamp +
-            (moveType == MoveType.RoyalDecree ? 60 : 120);
-
         if (moveType == MoveType.RoyalDecree) {
-            royalDecreeEndTime = endTime;
+            royalDecreeEndTime = block.timestamp + 60;
         } else {
-            pleaOfPeaceEndTime = endTime;
+            pleaOfPeaceEndTime = block.timestamp + 120;
         }
 
         emit GameAction(
@@ -351,35 +347,32 @@ contract GameMoves is GameCore {
     function _execCopy(
         address actor,
         address target,
-        MoveType moveType
+        MoveType moveType,
+        bool useItem
     ) internal returns (uint8) {
-        if (moveType == MoveType.Discover) {
-            uint8 itemType = uint8(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(block.timestamp, msg.sender, actor)
-                    )
-                ) % 3
-            );
-            _modifyItem(actor, itemType, 1);
-            return itemType + 1;
-        }
-
-        if (moveType == MoveType.CopycatMove) return _execCopycatMove(actor);
-        if (moveType == MoveType.EnergyFlow) return _execEnergyFlow(actor);
-        if (moveType == MoveType.SeizeItem)
-            return _execSeizeItem(actor, target);
-        if (moveType == MoveType.Distract) return _execDistract(actor, target);
-        if (moveType == MoveType.Gift) return _execGift(actor, target);
-
-        return 0;
+        // TODO: Implement copy logic
     }
 
     function _execCooldown(
         address actor,
         MoveType moveType
     ) internal returns (uint8) {
-        // TODO: Implement cooldown logic
+        address actorRoot = GameLibrary.find(dsuParent, actor);
+        uint moveTypeCount = uint(MoveType.Gift) + 1;
+
+        for (uint8 i = 0; i < NUM_PLAYERS; i++) {
+            address ally = gamePlayerAddresses[i];
+            if (
+                ally != actor && GameLibrary.find(dsuParent, ally) == actorRoot
+            ) {
+                for (uint mt = 0; mt < moveTypeCount; mt++) {
+                    if (moveCooldowns[MoveType(mt)] > 0) {
+                        playerData[ally].lastMoveTimestamp[mt] = 0;
+                    }
+                }
+            }
+        }
+        return 1;
     }
 
     function _execHarmful(
@@ -387,7 +380,56 @@ contract GameMoves is GameCore {
         MoveType moveType,
         address target
     ) internal returns (uint8) {
-        // TODO: Implement harmful logic
+        if (!playerData[target].hasJoined || target == actor)
+            revert InvalidTarget();
+        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
+            revert PeaceActive();
+        if (_consumeProtection(target)) return 0;
+
+        if (moveType == MoveType.SeizeItem) {
+            // Create array of available items
+            uint8[] memory availableItems = new uint8[](3);
+            uint8 itemCount = 0;
+
+            if (playerData[target].enchantedKeys > 0) {
+                availableItems[itemCount++] = ITEM_ENCHANTED_KEY;
+            }
+            if (playerData[target].keys > 0) {
+                availableItems[itemCount++] = ITEM_KEY;
+            }
+            if (playerData[target].staffs > 0) {
+                availableItems[itemCount++] = ITEM_STAFF;
+            }
+
+            if (itemCount == 0) revert NoItems();
+
+            // Select one random item to seize
+            uint8 selectedItem = _selectRandomItem(availableItems);
+
+            // Transfer the selected item
+            _modifyItem(target, selectedItem, -1);
+            _modifyItem(actor, selectedItem, 1);
+
+            return selectedItem + 1;
+        } else if (moveType == MoveType.Distract) {
+            // Set distracted state for target
+            playerData[target].distracted = true;
+            // Set cooldown for the actor (caller) of Distract
+            playerData[actor].lastMoveTimestamp[
+                uint256(MoveType.Distract)
+            ] = block.timestamp;
+            return 1;
+        } else if (moveType == MoveType.CreateFakeKey) {
+            // Increment the global fake keys counter
+            activeFakeKeysCount++;
+            // Set cooldown for the actor (caller) of CreateFakeKey
+            playerData[actor].lastMoveTimestamp[
+                uint256(MoveType.CreateFakeKey)
+            ] = block.timestamp;
+            return 1;
+        }
+
+        revert InvalidMoveType();
     }
 
     // --- Optimized Helper Functions ---
@@ -448,25 +490,6 @@ contract GameMoves is GameCore {
     }
 
     // --- Inlined Special Functions ---
-    function _execEnergyFlow(address actor) internal returns (uint8) {
-        address actorRoot = GameLibrary.find(dsuParent, actor);
-        uint moveTypeCount = uint(MoveType.Gift) + 1;
-
-        for (uint8 i = 0; i < NUM_PLAYERS; i++) {
-            address ally = gamePlayerAddresses[i];
-            if (
-                ally != actor && GameLibrary.find(dsuParent, ally) == actorRoot
-            ) {
-                for (uint mt = 0; mt < moveTypeCount; mt++) {
-                    if (moveCooldowns[MoveType(mt)] > 0) {
-                        playerData[ally].lastMoveTimestamp[mt] = 0;
-                    }
-                }
-            }
-        }
-        return 1;
-    }
-
     function _execSeizeItem(
         address actor,
         address target
@@ -491,59 +514,6 @@ contract GameMoves is GameCore {
         _modifyItem(target, itemType, -1);
         _modifyItem(actor, itemType, 1);
         return itemType + 1;
-    }
-
-    function _execDistract(
-        address actor,
-        address target
-    ) internal returns (uint8) {
-        if (!playerData[target].hasJoined || target == actor)
-            revert InvalidTarget();
-        if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime))
-            revert PeaceActive();
-        return _consumeProtection(target) ? 0 : 1;
-    }
-
-    function _execGift(
-        address actor,
-        address receiver
-    ) internal returns (uint8) {
-        if (
-            playerData[actor].keys +
-                playerData[actor].enchantedKeys +
-                playerData[actor].staffs ==
-            0
-        ) revert NoItems();
-        if (receiver == actor || !playerData[receiver].hasJoined)
-            revert InvalidTarget();
-
-        uint8 totalGifted;
-
-        // Transfer all items at once
-        if (playerData[actor].keys > 0) {
-            uint8 amount = playerData[actor].keys;
-            _modifyItem(receiver, ITEM_KEY, int8(amount));
-            _modifyItem(actor, ITEM_KEY, -int8(amount));
-            totalGifted += amount;
-        }
-
-        if (playerData[actor].enchantedKeys > 0) {
-            uint8 amount = playerData[actor].enchantedKeys;
-            _modifyItem(receiver, ITEM_ENCHANTED_KEY, int8(amount));
-            _modifyItem(actor, ITEM_ENCHANTED_KEY, -int8(amount));
-            totalGifted += amount;
-        }
-
-        if (playerData[actor].staffs > 0) {
-            uint8 amount = playerData[actor].staffs;
-            _modifyItem(receiver, ITEM_STAFF, int8(amount));
-            _modifyItem(actor, ITEM_STAFF, -int8(amount));
-            totalGifted += amount;
-        }
-
-        GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, receiver);
-        emit AllianceUpdated(actor, receiver, true);
-        return totalGifted;
     }
 
     // --- Victory Checks (inlined) ---
@@ -577,5 +547,17 @@ contract GameMoves is GameCore {
     function getPlayerKeys(address player) public view returns (uint8) {
         // Logic to return the number of keys a player has
         return playerData[player].keys;
+    }
+
+    function _selectRandomItem(
+        uint8[] memory availableItems
+    ) internal view returns (uint8) {
+        require(availableItems.length > 0, "No items available");
+        uint256 randomIndex = uint256(
+            keccak256(
+                abi.encodePacked(blockhash(block.number - 1), block.timestamp)
+            )
+        ) % availableItems.length;
+        return availableItems[randomIndex];
     }
 }
