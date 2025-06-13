@@ -132,7 +132,7 @@ contract GameMoveUnitTests is GameBaseTest {
         // Step 6: 6 min later Innocent calls move and it fails (only the Explorer can call Discover)
         vm.warp(block.timestamp + 6 * 60);
         vm.prank(innocentPlayer);
-        vm.expectRevert(GameCore.InvalidMoveType.selector);
+        vm.expectRevert(GameCore.PlayerNotInactive.selector);
         game.executeMove(params);
 
         // Step 7: 2 min later Innocent calls move and it passes (Explorer considered idle since last move occurred 8 min ago and IDLE_PLAYER_LIMIT is 7 min)
