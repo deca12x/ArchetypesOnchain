@@ -28,14 +28,9 @@ contract SendMNT is Script {
         uint256 amountPerRecipient = 10 ether;
 
         // Send MNT to each recipient
-        for (uint i = 0; i < recipients.length; i++) {
-            (bool success, ) = recipients[i].call{value: amountPerRecipient}(
-                ""
-            );
-            require(
-                success,
-                string(abi.encodePacked("Failed to send MNT to recipient ", i))
-            );
+        for (uint256 i = 0; i < recipients.length; i++) {
+            (bool success,) = recipients[i].call{value: amountPerRecipient}("");
+            require(success, string(abi.encodePacked("Failed to send MNT to recipient ", i)));
             console2.log("Sent", amountPerRecipient, "wei to", recipients[i]);
         }
 

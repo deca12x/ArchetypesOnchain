@@ -23,20 +23,12 @@ contract GameMoveUnitTests is GameBaseTest {
 
         // Find the players with the required character types
         heroPlayer = findPlayerWithCharacter(GameCore.CharacterType.Hero);
-        explorerPlayer = findPlayerWithCharacter(
-            GameCore.CharacterType.Explorer
-        );
-        innocentPlayer = findPlayerWithCharacter(
-            GameCore.CharacterType.Innocent
-        );
+        explorerPlayer = findPlayerWithCharacter(GameCore.CharacterType.Explorer);
+        innocentPlayer = findPlayerWithCharacter(GameCore.CharacterType.Innocent);
         artistPlayer = findPlayerWithCharacter(GameCore.CharacterType.Artist);
         rulerPlayer = findPlayerWithCharacter(GameCore.CharacterType.Ruler);
-        caregiverPlayer = findPlayerWithCharacter(
-            GameCore.CharacterType.Caregiver
-        );
-        commonManPlayer = findPlayerWithCharacter(
-            GameCore.CharacterType.CommonMan
-        );
+        caregiverPlayer = findPlayerWithCharacter(GameCore.CharacterType.Caregiver);
+        commonManPlayer = findPlayerWithCharacter(GameCore.CharacterType.CommonMan);
         jokerPlayer = findPlayerWithCharacter(GameCore.CharacterType.Joker);
         wizardPlayer = findPlayerWithCharacter(GameCore.CharacterType.Wizard);
         outlawPlayer = findPlayerWithCharacter(GameCore.CharacterType.Outlaw);
@@ -61,11 +53,7 @@ contract GameMoveUnitTests is GameBaseTest {
         // Verify alliance is formed by checking if both players have the same root
         address heroRoot = game.getDsuParent(heroPlayer);
         address explorerRoot = game.getDsuParent(explorerPlayer);
-        assertEq(
-            heroRoot,
-            explorerRoot,
-            "Hero and Explorer should be in the same alliance"
-        );
+        assertEq(heroRoot, explorerRoot, "Hero and Explorer should be in the same alliance");
 
         // Step 2: 2 min later, attempt Inspire Alliance during cooldown
         vm.warp(block.timestamp + 2 * 60);
@@ -92,11 +80,7 @@ contract GameMoveUnitTests is GameBaseTest {
         // Verify alliance is formed by checking if both players have the same root
         heroRoot = game.getDsuParent(heroPlayer);
         explorerRoot = game.getDsuParent(explorerPlayer);
-        assertEq(
-            heroRoot,
-            explorerRoot,
-            "Hero and Explorer should be in the same alliance after inactivity"
-        );
+        assertEq(heroRoot, explorerRoot, "Hero and Explorer should be in the same alliance after inactivity");
     }
 
     function testDiscover() public {

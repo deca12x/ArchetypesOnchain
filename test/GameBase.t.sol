@@ -49,7 +49,7 @@ contract GameBaseTest is Test {
         players[11] = player12;
 
         // Fund all players
-        for (uint i = 1; i < 12; i++) {
+        for (uint256 i = 1; i < 12; i++) {
             // Skip player1 as already funded
             vm.deal(players[i], 1 ether);
         }
@@ -61,29 +61,17 @@ contract GameBaseTest is Test {
     // Helper function to have all players join the game
     function joinAllPlayers() internal {
         // Skip player1 as they join during contract creation
-        for (uint i = 1; i < 12; i++) {
+        for (uint256 i = 1; i < 12; i++) {
             vm.prank(players[i]);
             game.joinGame{value: ENTRY_FEE}();
         }
     }
 
     // Helper to find a player with a specific character type
-    function findPlayerWithCharacter(
-        GameCore.CharacterType charType
-    ) internal view returns (address) {
+    function findPlayerWithCharacter(GameCore.CharacterType charType) internal view returns (address) {
         for (uint8 i = 0; i < game.numPlayersJoined(); i++) {
             address playerAddr = game.gamePlayerAddresses(i);
-            (
-                ,
-                GameCore.CharacterType character,
-                ,
-                ,
-                ,
-                ,
-                bool hasJoined,
-                ,
-
-            ) = game.playerData(playerAddr);
+            (, GameCore.CharacterType character,,,,, bool hasJoined,,) = game.playerData(playerAddr);
 
             if (hasJoined && character == charType) {
                 return playerAddr;
@@ -93,48 +81,33 @@ contract GameBaseTest is Test {
     }
 
     // Helper to get character type of a player
-    function getCharacterType(
-        address playerAddr
-    ) internal view returns (GameCore.CharacterType) {
-        (, GameCore.CharacterType character, , , , , bool hasJoined, , ) = game
-            .playerData(playerAddr);
+    function getCharacterType(address playerAddr) internal view returns (GameCore.CharacterType) {
+        (, GameCore.CharacterType character,,,,, bool hasJoined,,) = game.playerData(playerAddr);
         require(hasJoined, "Player has not joined");
         return character;
     }
 
     // Helper to check if a player has a specific number of keys
-    function playerHasKeys(
-        address playerAddr,
-        uint8 keyCount
-    ) internal view returns (bool) {
-        (, , uint8 keys, , , , , , ) = game.playerData(playerAddr);
+    function playerHasKeys(address playerAddr, uint8 keyCount) internal view returns (bool) {
+        (,, uint8 keys,,,,,,) = game.playerData(playerAddr);
         return keys == keyCount;
     }
 
     // Helper to check if a player has a specific number of enchanted keys
-    function playerHasEnchantedKeys(
-        address playerAddr,
-        uint8 keyCount
-    ) internal view returns (bool) {
-        (, , , uint8 enchantedKeys, , , , , ) = game.playerData(playerAddr);
+    function playerHasEnchantedKeys(address playerAddr, uint8 keyCount) internal view returns (bool) {
+        (,,, uint8 enchantedKeys,,,,,) = game.playerData(playerAddr);
         return enchantedKeys == keyCount;
     }
 
     // Helper to check if a player has a specific number of staffs
-    function playerHasStaffs(
-        address playerAddr,
-        uint8 staffCount
-    ) internal view returns (bool) {
-        (, , , , uint8 staffs, , , , ) = game.playerData(playerAddr);
+    function playerHasStaffs(address playerAddr, uint8 staffCount) internal view returns (bool) {
+        (,,,, uint8 staffs,,,,) = game.playerData(playerAddr);
         return staffs == staffCount;
     }
 
     // Helper to check if a player has a specific number of protections
-    function playerHasProtections(
-        address playerAddr,
-        uint8 protectionCount
-    ) internal view returns (bool) {
-        (, , , , , uint8 protections, , , ) = game.playerData(playerAddr);
+    function playerHasProtections(address playerAddr, uint8 protectionCount) internal view returns (bool) {
+        (,,,,, uint8 protections,,,) = game.playerData(playerAddr);
         return protections == protectionCount;
     }
 }

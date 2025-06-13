@@ -17,9 +17,7 @@ contract GameEndToEnd2Test is GameBaseTest {
 
         // Find the players with the required character types
         rulerPlayer = findPlayerWithCharacter(GameCore.CharacterType.Ruler);
-        commonManPlayer = findPlayerWithCharacter(
-            GameCore.CharacterType.CommonMan
-        );
+        commonManPlayer = findPlayerWithCharacter(GameCore.CharacterType.CommonMan);
         wizardPlayer = findPlayerWithCharacter(GameCore.CharacterType.Wizard);
         sagePlayer = findPlayerWithCharacter(GameCore.CharacterType.Sage);
 
@@ -120,7 +118,7 @@ contract GameEndToEnd2Test is GameBaseTest {
         bool sageIsOnlyWinner = true;
 
         // We need to count the winners and check if Sage is the only winner
-        for (uint i = 0; i < game.NUM_PLAYERS(); i++) {
+        for (uint256 i = 0; i < game.NUM_PLAYERS(); i++) {
             try game.winners(i) returns (address winner) {
                 winnerCount++;
                 if (winner == sagePlayer) {
@@ -140,19 +138,11 @@ contract GameEndToEnd2Test is GameBaseTest {
 
         // Check that Sage's balance increased
         uint256 finalSageBalance = address(sagePlayer).balance;
-        assertTrue(
-            finalSageBalance > initialSageBalance,
-            "Sage should have received prize money"
-        );
+        assertTrue(finalSageBalance > initialSageBalance, "Sage should have received prize money");
 
         // Check that Sage received all the prize money
-        uint256 expectedPrize = address(game).balance +
-            (finalSageBalance - initialSageBalance);
-        assertEq(
-            finalSageBalance - initialSageBalance,
-            expectedPrize,
-            "Sage should have received all the prize money"
-        );
+        uint256 expectedPrize = address(game).balance + (finalSageBalance - initialSageBalance);
+        assertEq(finalSageBalance - initialSageBalance, expectedPrize, "Sage should have received all the prize money");
 
         // After victory
         console.log("Final state - Padlocks:", game.padlocks());
