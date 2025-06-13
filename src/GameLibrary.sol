@@ -12,31 +12,22 @@ library GameLibrary {
     }
 
     // Check if the game has met open victory condition (padlocks = 0 and seals = 0)
-    function checkOpenVictory(
-        ChestState memory state
-    ) internal pure returns (bool) {
+    function checkOpenVictory(ChestState memory state) internal pure returns (bool) {
         return state.padlocks == 0 && state.seals == 0;
     }
 
     // Check if the game has met block victory condition (padlocks >= 3 and seals >= 3)
-    function checkBlockVictory(
-        ChestState memory state
-    ) internal pure returns (bool) {
+    function checkBlockVictory(ChestState memory state) internal pure returns (bool) {
         return state.padlocks >= 3 && state.seals >= 3;
     }
 
     // Check if Plea of Peace is active
-    function isPleaOfPeaceActive(
-        uint256 pleaOfPeaceEndTime
-    ) internal view returns (bool) {
+    function isPleaOfPeaceActive(uint256 pleaOfPeaceEndTime) internal view returns (bool) {
         return block.timestamp < pleaOfPeaceEndTime;
     }
 
     // DSU (Disjoint Set Union) operations for alliance management
-    function findRoot(
-        mapping(address => address) storage dsuParent,
-        address player
-    ) internal view returns (address) {
+    function findRoot(mapping(address => address) storage dsuParent, address player) internal view returns (address) {
         address root = player;
         while (root != dsuParent[root]) {
             root = dsuParent[root];
@@ -45,10 +36,7 @@ library GameLibrary {
     }
 
     // Path compression version of find that updates storage
-    function find(
-        mapping(address => address) storage dsuParent,
-        address player
-    ) internal returns (address) {
+    function find(mapping(address => address) storage dsuParent, address player) internal returns (address) {
         if (dsuParent[player] == player) {
             return player;
         }

@@ -17,9 +17,7 @@ contract GameEndToEndTest is GameBaseTest {
         artistPlayer = findPlayerWithCharacter(GameCore.CharacterType.Artist);
         heroPlayer = findPlayerWithCharacter(GameCore.CharacterType.Hero);
         wizardPlayer = findPlayerWithCharacter(GameCore.CharacterType.Wizard);
-        innocentPlayer = findPlayerWithCharacter(
-            GameCore.CharacterType.Innocent
-        );
+        innocentPlayer = findPlayerWithCharacter(GameCore.CharacterType.Innocent);
 
         // Advance timestamp past the cooldown period
         vm.warp(block.timestamp + 20 * 60 + 1);
@@ -36,16 +34,12 @@ contract GameEndToEndTest is GameBaseTest {
             moveType: GameCore.MoveType.ForgeKey,
             actor: artistPlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
         // Verify key was created
-        assertTrue(
-            playerHasKeys(artistPlayer, 1),
-            "Artist should have 1 key after ForgeKey"
-        );
+        assertTrue(playerHasKeys(artistPlayer, 1), "Artist should have 1 key after ForgeKey");
 
         // Log pre-gift state
         console.log("Before Gift - Artist keys:", getPlayerKeys(artistPlayer));
@@ -62,14 +56,8 @@ contract GameEndToEndTest is GameBaseTest {
         console.log("After Gift - Hero keys:", getPlayerKeys(heroPlayer));
 
         // Verify key transfer
-        assertTrue(
-            playerHasKeys(heroPlayer, 1),
-            "Hero should have 1 key after gift"
-        );
-        assertTrue(
-            playerHasKeys(artistPlayer, 0),
-            "Artist should have 0 keys after gift"
-        );
+        assertTrue(playerHasKeys(heroPlayer, 1), "Hero should have 1 key after gift");
+        assertTrue(playerHasKeys(artistPlayer, 0), "Artist should have 0 keys after gift");
     }
 
     function testHeroUnlock() public {
@@ -81,8 +69,7 @@ contract GameEndToEndTest is GameBaseTest {
             moveType: GameCore.MoveType.UnlockChest,
             actor: heroPlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
@@ -92,7 +79,7 @@ contract GameEndToEndTest is GameBaseTest {
 
     // Helper function to get player's key count
     function getPlayerKeys(address player) internal view returns (uint8) {
-        (, , uint8 keys, , , , bool joined, ) = game.playerData(player);
+        (,, uint8 keys,,,, bool joined,,) = game.playerData(player);
         require(joined, "Player not joined");
         return keys;
     }
