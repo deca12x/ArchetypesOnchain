@@ -36,8 +36,7 @@ contract GameEndToEndTest is GameBaseTest {
             moveType: GameCore.MoveType.ForgeKey,
             actor: artistPlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
@@ -81,8 +80,7 @@ contract GameEndToEndTest is GameBaseTest {
             moveType: GameCore.MoveType.UnlockChest,
             actor: heroPlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
@@ -92,7 +90,7 @@ contract GameEndToEndTest is GameBaseTest {
 
     // Helper function to get player's key count
     function getPlayerKeys(address player) internal view returns (uint8) {
-        (, , uint8 keys, , , , bool joined, ) = game.playerData(player);
+        (, , uint8 keys, , , , bool joined, , ) = game.playerData(player);
         require(joined, "Player not joined");
         return keys;
     }

@@ -42,7 +42,6 @@ contract GameMoves is GameCore {
         address actor;
         address targetPlayer;
         bool useItem;
-        uint8 additionalParam;
     }
 
     // Add this state variable at the top of the contract with other state variables

@@ -5,7 +5,6 @@ import "forge-std/Test.sol";
 import "../src/GameMoves.sol";
 import "../src/GameCore.sol";
 import "../src/GameLibrary.sol";
-import "../src/PlayerLibrary.sol";
 
 contract GameBaseTest is Test {
     GameMoves game;
@@ -82,6 +81,7 @@ contract GameBaseTest is Test {
                 ,
                 ,
                 bool hasJoined,
+                ,
 
             ) = game.playerData(playerAddr);
 
@@ -96,7 +96,7 @@ contract GameBaseTest is Test {
     function getCharacterType(
         address playerAddr
     ) internal view returns (GameCore.CharacterType) {
-        (, GameCore.CharacterType character, , , , , bool hasJoined, ) = game
+        (, GameCore.CharacterType character, , , , , bool hasJoined, , ) = game
             .playerData(playerAddr);
         require(hasJoined, "Player has not joined");
         return character;
@@ -107,7 +107,7 @@ contract GameBaseTest is Test {
         address playerAddr,
         uint8 keyCount
     ) internal view returns (bool) {
-        (, , uint8 keys, , , , , ) = game.playerData(playerAddr);
+        (, , uint8 keys, , , , , , ) = game.playerData(playerAddr);
         return keys == keyCount;
     }
 
@@ -116,7 +116,7 @@ contract GameBaseTest is Test {
         address playerAddr,
         uint8 keyCount
     ) internal view returns (bool) {
-        (, , , uint8 enchantedKeys, , , , ) = game.playerData(playerAddr);
+        (, , , uint8 enchantedKeys, , , , , ) = game.playerData(playerAddr);
         return enchantedKeys == keyCount;
     }
 
@@ -125,7 +125,7 @@ contract GameBaseTest is Test {
         address playerAddr,
         uint8 staffCount
     ) internal view returns (bool) {
-        (, , , , uint8 staffs, , , ) = game.playerData(playerAddr);
+        (, , , , uint8 staffs, , , , ) = game.playerData(playerAddr);
         return staffs == staffCount;
     }
 
@@ -134,7 +134,7 @@ contract GameBaseTest is Test {
         address playerAddr,
         uint8 protectionCount
     ) internal view returns (bool) {
-        (, , , , , uint8 protections, , ) = game.playerData(playerAddr);
+        (, , , , , uint8 protections, , , ) = game.playerData(playerAddr);
         return protections == protectionCount;
     }
 }

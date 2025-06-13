@@ -47,8 +47,7 @@ contract GameEndToEnd2Test is GameBaseTest {
             moveType: GameCore.MoveType.SecureChest,
             actor: rulerPlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
@@ -65,8 +64,7 @@ contract GameEndToEnd2Test is GameBaseTest {
             moveType: GameCore.MoveType.SecureChest,
             actor: commonManPlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
@@ -84,8 +82,7 @@ contract GameEndToEnd2Test is GameBaseTest {
             moveType: GameCore.MoveType.ArcaneSeal,
             actor: wizardPlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
@@ -103,8 +100,7 @@ contract GameEndToEnd2Test is GameBaseTest {
             moveType: GameCore.MoveType.ArcaneSeal,
             actor: sagePlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 

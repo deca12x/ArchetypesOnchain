@@ -54,8 +54,7 @@ contract GameMoveUnitTests is GameBaseTest {
             moveType: GameCore.MoveType.InspireAlliance,
             actor: heroPlayer,
             targetPlayer: explorerPlayer,
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
@@ -107,8 +106,7 @@ contract GameMoveUnitTests is GameBaseTest {
             moveType: GameCore.MoveType.Discover,
             actor: explorerPlayer,
             targetPlayer: address(0),
-            useEnchantedItem: false,
-            additionalParam: 0
+            useItem: false
         });
         game.executeMove(params);
 
