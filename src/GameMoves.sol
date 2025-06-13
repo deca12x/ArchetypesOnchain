@@ -180,20 +180,74 @@ contract GameMoves is GameCore {
             _modifyItem(target, selectedItem, 1);
 
             GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, target);
-            emit AllianceUpdated(actor, target, true);
+            return selectedItem + 1;
+        } else if (moveType == MoveType.InspireAlliance) {
+            // Bind actor and target
+            GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, target);
+            return 1;
+        } else if (moveType == MoveType.GuardianBond) {
+            // Bind actor and target
+            GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, target);
+
+            // Get a random item from the target
+            uint8[] memory availableItems = new uint8[](3);
+            uint8 itemCount = 0;
+
+            if (playerData[target].keys > 0) {
+                availableItems[itemCount++] = ITEM_KEY;
+            }
+            if (playerData[target].enchantedKeys > 0) {
+                availableItems[itemCount++] = ITEM_ENCHANTED_KEY;
+            }
+            if (playerData[target].staffs > 0) {
+                availableItems[itemCount++] = ITEM_STAFF;
+            }
+
+            if (itemCount == 0) revert NoItems();
+
+            uint8 selectedItem = _selectRandomItem(availableItems);
+
+            // Transfer the selected item to the actor
+            _modifyItem(target, selectedItem, -1);
+            _modifyItem(actor, selectedItem, 1);
+
+            return selectedItem + 1;
+        } else if (moveType == MoveType.SoulBond) {
+            // Bind actor and target
+            GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, target);
+
+            // Give a random item to the target
+            uint8[] memory availableItems = new uint8[](3);
+            uint8 itemCount = 0;
+
+            if (playerData[actor].keys > 0) {
+                availableItems[itemCount++] = ITEM_KEY;
+            }
+            if (playerData[actor].enchantedKeys > 0) {
+                availableItems[itemCount++] = ITEM_ENCHANTED_KEY;
+            }
+            if (playerData[actor].staffs > 0) {
+                availableItems[itemCount++] = ITEM_STAFF;
+            }
+
+            if (itemCount == 0) revert NoItems();
+
+            uint8 selectedItem = _selectRandomItem(availableItems);
+
+            // Transfer the selected item to the target
+            _modifyItem(actor, selectedItem, -1);
+            _modifyItem(target, selectedItem, 1);
+
             return selectedItem + 1;
         } else {
+            // Default binding logic
             bool success = GameLibrary.resetAndUnion(
                 dsuParent,
                 dsuSetSize,
                 actor,
                 target
             );
-            if (success) {
-                emit AllianceUpdated(actor, target, true);
-                return 1;
-            }
-            return 0;
+            return success ? 1 : 0;
         }
     }
 
@@ -212,7 +266,6 @@ contract GameMoves is GameCore {
             result = 2;
         } else if (moveType == MoveType.ForgeKey) {
             if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
-                emit GameAction(actor, address(0), 8, 0, uint256(moveType));
                 return 0;
             }
             itemType = ITEM_KEY;
@@ -244,14 +297,6 @@ contract GameMoves is GameCore {
         } else {
             seals++;
         }
-
-        emit GameAction(
-            actor,
-            address(0),
-            uint8(MoveCategory.CHEST_LOCK),
-            1,
-            (uint256(padlocks) << 8) | seals
-        );
 
         _checkBlockVictory(actor);
         return 1;
@@ -306,13 +351,6 @@ contract GameMoves is GameCore {
         }
 
         if (changed) {
-            emit GameAction(
-                actor,
-                address(0),
-                8,
-                1,
-                (uint256(padlocks) << 8) | seals
-            );
             _checkOpenVictory(actor);
             return 1;
         }
@@ -327,7 +365,6 @@ contract GameMoves is GameCore {
         if (target != address(0) && !playerData[target].hasJoined)
             revert TargetNotPlayer();
         playerData[target].protections++;
-        emit GameAction(target, address(0), 16, 1, uint256(moveType));
         return 1;
     }
 
@@ -341,13 +378,6 @@ contract GameMoves is GameCore {
             pleaOfPeaceEndTime = block.timestamp + 120;
         }
 
-        emit GameAction(
-            actor,
-            address(0),
-            uint8(MoveCategory.GLOBAL),
-            1,
-            endTime
-        );
         return 1;
     }
 
@@ -509,26 +539,11 @@ contract GameMoves is GameCore {
                 revert InvalidMoveType();
             }
         }
-
-        emit GameAction(
-            player,
-            address(0),
-            97, // Action type for item modification
-            itemType,
-            uint256(uint8(amount))
-        );
     }
 
     function _consumeProtection(address target) internal returns (bool) {
         if (playerData[target].protections > 0) {
             playerData[target].protections--;
-            emit GameAction(
-                target,
-                address(0),
-                96,
-                playerData[target].protections > 0 ? 1 : 0,
-                0
-            );
             return true;
         }
         return false;
