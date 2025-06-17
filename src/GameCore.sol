@@ -78,7 +78,6 @@ contract GameCore {
         UnlockChest, // Hero and Lover can use this move
         UnsealChest, // Innocent and Sage can use this move
         Gift // All characters can use this move
-
     }
 
     // Player struct
@@ -127,21 +126,54 @@ contract GameCore {
     mapping(MoveType => uint256) public moveCooldowns;
 
     // Character-move relationships
-    mapping(CharacterType => mapping(MoveType => bool)) public characterCanUseMove;
+    mapping(CharacterType => mapping(MoveType => bool))
+        public characterCanUseMove;
 
     // Events
     event GameCreated(address indexed creator, uint256 entryFee);
-    event PlayerJoined(uint8 playerIndex, address indexed playerAddress, CharacterType character);
-    event GameStarted(uint256 startTime, uint8 initialPadlocks, uint8 initialSeals);
-    event MoveExecuted(address indexed caller, address indexed actor, MoveType move, string details);
+    event PlayerJoined(
+        uint8 playerIndex,
+        address indexed playerAddress,
+        CharacterType character
+    );
+    event GameStarted(
+        uint256 startTime,
+        uint8 initialPadlocks,
+        uint8 initialSeals
+    );
+    event MoveExecuted(
+        address indexed caller,
+        address indexed actor,
+        MoveType move,
+        string details
+    );
     event ChestStateChanged(uint8 newPadlocks, uint8 newSeals);
-    event AllianceUpdated(address indexed player1, address indexed player2, bool bound);
+    event AllianceUpdated(
+        address indexed player1,
+        address indexed player2,
+        bool bound
+    );
     event ItemsChanged(address indexed player, string itemType, int8 change);
-    event ProtectionStatusChanged(address indexed player, bool protected, string byMove);
+    event ProtectionStatusChanged(
+        address indexed player,
+        bool protected,
+        string byMove
+    );
     event GameOver(
-        uint8 finalPadlocks, uint8 finalSeals, address[] winners, uint256 prizePerWinner, uint256 gameDuration
+        uint8 finalPadlocks,
+        uint8 finalSeals,
+        address[] winners,
+        uint256 prizePerWinner,
+        uint256 gameDuration
     );
     event EffectActivated(string effectName, uint256 endTime);
+    event CooldownCheck(
+        address indexed actor,
+        MoveType move,
+        uint256 lastMoveTimestamp,
+        uint256 cooldownDuration,
+        uint256 currentTime
+    );
 
     // Modifiers
 
@@ -154,7 +186,9 @@ contract GameCore {
     // Initialize character move mappings
     function _initializeCharacterMoves() internal {
         // Hero moves
-        characterCanUseMove[CharacterType.Hero][MoveType.InspireAlliance] = true;
+        characterCanUseMove[CharacterType.Hero][
+            MoveType.InspireAlliance
+        ] = true;
         characterCanUseMove[CharacterType.Hero][MoveType.Guard] = true;
         characterCanUseMove[CharacterType.Hero][MoveType.UnlockChest] = true;
 
@@ -165,11 +199,17 @@ contract GameCore {
 
         // Innocent moves
         characterCanUseMove[CharacterType.Innocent][MoveType.Purify] = true;
-        characterCanUseMove[CharacterType.Innocent][MoveType.UnsealChest] = true;
-        characterCanUseMove[CharacterType.Innocent][MoveType.PleaOfPeace] = true;
+        characterCanUseMove[CharacterType.Innocent][
+            MoveType.UnsealChest
+        ] = true;
+        characterCanUseMove[CharacterType.Innocent][
+            MoveType.PleaOfPeace
+        ] = true;
 
         // Artist moves
-        characterCanUseMove[CharacterType.Artist][MoveType.CreateEnchantedKey] = true;
+        characterCanUseMove[CharacterType.Artist][
+            MoveType.CreateEnchantedKey
+        ] = true;
         characterCanUseMove[CharacterType.Artist][MoveType.ForgeKey] = true;
         characterCanUseMove[CharacterType.Artist][MoveType.Evade] = true;
 
@@ -179,13 +219,21 @@ contract GameCore {
         characterCanUseMove[CharacterType.Ruler][MoveType.SeizeItem] = true;
 
         // Caregiver moves
-        characterCanUseMove[CharacterType.Caregiver][MoveType.GuardianBond] = true;
+        characterCanUseMove[CharacterType.Caregiver][
+            MoveType.GuardianBond
+        ] = true;
         characterCanUseMove[CharacterType.Caregiver][MoveType.Guard] = true;
-        characterCanUseMove[CharacterType.Caregiver][MoveType.PleaOfPeace] = true;
+        characterCanUseMove[CharacterType.Caregiver][
+            MoveType.PleaOfPeace
+        ] = true;
 
         // CommonMan moves
-        characterCanUseMove[CharacterType.CommonMan][MoveType.CopycatMove] = true;
-        characterCanUseMove[CharacterType.CommonMan][MoveType.SecureChest] = true;
+        characterCanUseMove[CharacterType.CommonMan][
+            MoveType.CopycatMove
+        ] = true;
+        characterCanUseMove[CharacterType.CommonMan][
+            MoveType.SecureChest
+        ] = true;
         characterCanUseMove[CharacterType.CommonMan][MoveType.Distract] = true;
 
         // Joker moves
@@ -312,7 +360,15 @@ contract GameCore {
         ];
 
         // Pseudo-random shuffle
-        uint256 seed = uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, address(this))));
+        uint256 seed = uint256(
+            keccak256(
+                abi.encodePacked(
+                    block.timestamp,
+                    block.prevrandao,
+                    address(this)
+                )
+            )
+        );
 
         for (uint8 i = 0; i < NUM_PLAYERS; i++) {
             initialCharacterOrder[i] = charactersToAssign[i];
@@ -349,7 +405,9 @@ contract GameCore {
 
     function _joinLogic(address _playerAddr) internal {
         playerData[_playerAddr].playerAddress = _playerAddr;
-        playerData[_playerAddr].character = initialCharacterOrder[numPlayersJoined];
+        playerData[_playerAddr].character = initialCharacterOrder[
+            numPlayersJoined
+        ];
         playerData[_playerAddr].hasJoined = true;
         playerData[_playerAddr].inactivityTimestamp = block.timestamp;
 
@@ -359,7 +417,11 @@ contract GameCore {
         dsuParent[_playerAddr] = _playerAddr;
         dsuSetSize[_playerAddr] = 1;
 
-        emit PlayerJoined(numPlayersJoined, _playerAddr, playerData[_playerAddr].character);
+        emit PlayerJoined(
+            numPlayersJoined,
+            _playerAddr,
+            playerData[_playerAddr].character
+        );
 
         numPlayersJoined++;
 
@@ -395,7 +457,10 @@ contract GameCore {
     }
 
     // Check if a player can use a specific move
-    function canUseMove(address _player, MoveType _move) public view returns (bool) {
+    function canUseMove(
+        address _player,
+        MoveType _move
+    ) public view returns (bool) {
         if (!playerData[_player].hasJoined) return false;
 
         CharacterType character = playerData[_player].character;
@@ -403,19 +468,37 @@ contract GameCore {
     }
 
     // Base function to validate an actor for a move
-    function _validateAndPrepareActor(address _caller, address _actor, MoveType _move) internal {
+    function _validateAndPrepareActor(
+        address _caller,
+        address _actor,
+        MoveType _move
+    ) internal {
         if (!playerData[_caller].hasJoined) revert NotAPlayer(_caller);
         if (!playerData[_actor].hasJoined) revert NotAPlayer(_actor);
 
         if (_caller != _actor) {
-            if (block.timestamp < playerData[_actor].inactivityTimestamp + IDLE_PLAYER_LIMIT) {
+            if (
+                block.timestamp <
+                playerData[_actor].inactivityTimestamp + IDLE_PLAYER_LIMIT
+            ) {
                 revert PlayerNotInactive();
             }
         }
 
         uint256 cooldownDuration = moveCooldowns[_move];
         if (cooldownDuration > 0) {
-            if (block.timestamp < playerData[_actor].lastMoveTimestamp[uint256(_move)] + cooldownDuration) {
+            if (
+                block.timestamp <
+                playerData[_actor].lastMoveTimestamp[uint256(_move)] +
+                    cooldownDuration
+            ) {
+                emit CooldownCheck(
+                    _actor,
+                    _move,
+                    playerData[_actor].lastMoveTimestamp[uint256(_move)],
+                    cooldownDuration,
+                    block.timestamp
+                );
                 revert MoveOnCooldown();
             }
         }
@@ -438,7 +521,10 @@ contract GameCore {
 
         // Count winners
         for (uint8 i = 0; i < NUM_PLAYERS; i++) {
-            if (GameLibrary.find(dsuParent, gamePlayerAddresses[i]) == winningRoot) {
+            if (
+                GameLibrary.find(dsuParent, gamePlayerAddresses[i]) ==
+                winningRoot
+            ) {
                 winnersCount++;
             }
         }
@@ -459,14 +545,22 @@ contract GameCore {
 
         // Transfer prizes
         for (uint8 i = 0; i < winnersCount; i++) {
-            (bool success,) = currentWinners[i].call{value: prizePerWinner}("");
+            (bool success, ) = currentWinners[i].call{value: prizePerWinner}(
+                ""
+            );
             require(success, "Transfer failed");
         }
 
         winners = currentWinners;
         uint256 gameDuration = block.timestamp - gameStartTime;
 
-        emit GameOver(padlocks, seals, currentWinners, prizePerWinner, gameDuration);
+        emit GameOver(
+            padlocks,
+            seals,
+            currentWinners,
+            prizePerWinner,
+            gameDuration
+        );
     }
 
     function getDsuParent(address player) external view returns (address) {

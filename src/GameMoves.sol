@@ -20,7 +20,6 @@ contract GameMoves is GameCore {
         COPY, // 6
         COOLDOWN, // 7
         HARMFUL // 8
-
     }
 
     // Mapping of moves to their categories
@@ -30,7 +29,11 @@ contract GameMoves is GameCore {
 
     // Consolidated single event
     event GameAction(
-        address indexed actor, address indexed target, uint8 indexed actionType, uint8 result, uint256 data
+        address indexed actor,
+        address indexed target,
+        uint8 indexed actionType,
+        uint8 result,
+        uint256 data
     );
 
     // --- Packed Move Parameters ---
@@ -53,7 +56,8 @@ contract GameMoves is GameCore {
         moveToCategoryMap[MoveType.Gift] = MoveCategory.ALLIANCE;
 
         // Item creation moves
-        moveToCategoryMap[MoveType.CreateEnchantedKey] = MoveCategory.ITEM_CREATE;
+        moveToCategoryMap[MoveType.CreateEnchantedKey] = MoveCategory
+            .ITEM_CREATE;
         moveToCategoryMap[MoveType.ConjureStaff] = MoveCategory.ITEM_CREATE;
         moveToCategoryMap[MoveType.ForgeKey] = MoveCategory.ITEM_CREATE;
         moveToCategoryMap[MoveType.Discover] = MoveCategory.ITEM_CREATE;
@@ -127,17 +131,32 @@ contract GameMoves is GameCore {
             lastMoveExecuted = p.moveType;
         }
 
-        emit GameAction(p.actor, p.targetPlayer, uint8(category), result, uint256(p.moveType));
+        emit GameAction(
+            p.actor,
+            p.targetPlayer,
+            uint8(category),
+            result,
+            uint256(p.moveType)
+        );
     }
 
     // --- Optimized Category Implementations ---
-    function _execAlliance(address actor, MoveType moveType, address target) internal returns (uint8) {
+    function _execAlliance(
+        address actor,
+        MoveType moveType,
+        address target
+    ) internal returns (uint8) {
         if (target == actor || !playerData[target].hasJoined) {
             revert InvalidTarget();
         }
 
         if (moveType == MoveType.Gift) {
-            if (playerData[actor].keys + playerData[actor].enchantedKeys + playerData[actor].staffs == 0) {
+            if (
+                playerData[actor].keys +
+                    playerData[actor].enchantedKeys +
+                    playerData[actor].staffs ==
+                0
+            ) {
                 revert NoItems();
             }
 
@@ -224,12 +243,20 @@ contract GameMoves is GameCore {
             return selectedItem + 1;
         } else {
             // Default binding logic
-            bool success = GameLibrary.resetAndUnion(dsuParent, dsuSetSize, actor, target);
+            bool success = GameLibrary.resetAndUnion(
+                dsuParent,
+                dsuSetSize,
+                actor,
+                target
+            );
             return success ? 1 : 0;
         }
     }
 
-    function _execItemCreate(address actor, MoveType moveType) internal returns (uint8) {
+    function _execItemCreate(
+        address actor,
+        MoveType moveType
+    ) internal returns (uint8) {
         uint8 itemType;
         uint8 result;
 
@@ -259,7 +286,10 @@ contract GameMoves is GameCore {
         return result;
     }
 
-    function _execChestLock(address actor, MoveType moveType) internal returns (uint8) {
+    function _execChestLock(
+        address actor,
+        MoveType moveType
+    ) internal returns (uint8) {
         if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
             revert PeaceActive();
         }
@@ -274,7 +304,11 @@ contract GameMoves is GameCore {
         return 1;
     }
 
-    function _execChestUnlock(address actor, MoveType moveType, bool useEnchanted) internal returns (uint8) {
+    function _execChestUnlock(
+        address actor,
+        MoveType moveType,
+        bool useEnchanted
+    ) internal returns (uint8) {
         if (GameLibrary.isPleaOfPeaceActive(pleaOfPeaceEndTime)) {
             revert PeaceActive();
         }
@@ -287,7 +321,9 @@ contract GameMoves is GameCore {
         } else if (moveType == MoveType.Purify && seals > 0) {
             seals--;
             changed = true;
-        } else if (moveType == MoveType.UnlockChest || moveType == MoveType.UnsealChest) {
+        } else if (
+            moveType == MoveType.UnlockChest || moveType == MoveType.UnsealChest
+        ) {
             if (useEnchanted) {
                 if (playerData[actor].enchantedKeys == 0) revert NoEKey();
                 _modifyItem(actor, ITEM_ENCHANTED_KEY, -1);
@@ -342,8 +378,15 @@ contract GameMoves is GameCore {
         return 1;
     }
 
-    function _execCopy(address actor, address target, bool useItem) internal returns (uint8) {
-        if (uint256(lastMoveExecuted) == 0 || lastMoveExecuted == MoveType.CopycatMove) {
+    function _execCopy(
+        address actor,
+        address target,
+        bool useItem
+    ) internal returns (uint8) {
+        if (
+            uint256(lastMoveExecuted) == 0 ||
+            lastMoveExecuted == MoveType.CopycatMove
+        ) {
             revert NoValidMove();
         }
 
@@ -387,7 +430,9 @@ contract GameMoves is GameCore {
 
         for (uint8 i = 0; i < NUM_PLAYERS; i++) {
             address ally = gamePlayerAddresses[i];
-            if (ally != actor && GameLibrary.find(dsuParent, ally) == actorRoot) {
+            if (
+                ally != actor && GameLibrary.find(dsuParent, ally) == actorRoot
+            ) {
                 for (uint256 mt = 0; mt < moveTypeCount; mt++) {
                     if (moveCooldowns[MoveType(mt)] > 0) {
                         playerData[ally].lastMoveTimestamp[mt] = 0;
@@ -398,7 +443,11 @@ contract GameMoves is GameCore {
         return 1;
     }
 
-    function _execHarmful(address actor, MoveType moveType, address target) internal returns (uint8) {
+    function _execHarmful(
+        address actor,
+        MoveType moveType,
+        address target
+    ) internal returns (uint8) {
         if (!playerData[target].hasJoined || target == actor) {
             revert InvalidTarget();
         }
@@ -436,13 +485,17 @@ contract GameMoves is GameCore {
             // Set distracted state for target
             playerData[target].distracted = true;
             // Set cooldown for the actor (caller) of Distract
-            playerData[actor].lastMoveTimestamp[uint256(MoveType.Distract)] = block.timestamp;
+            playerData[actor].lastMoveTimestamp[
+                uint256(MoveType.Distract)
+            ] = block.timestamp;
             return 1;
         } else if (moveType == MoveType.CreateFakeKey) {
             // Increment the global fake keys counter
             activeFakeKeysCount++;
             // Set cooldown for the actor (caller) of CreateFakeKey
-            playerData[actor].lastMoveTimestamp[uint256(MoveType.CreateFakeKey)] = block.timestamp;
+            playerData[actor].lastMoveTimestamp[
+                uint256(MoveType.CreateFakeKey)
+            ] = block.timestamp;
             return 1;
         }
 
@@ -493,7 +546,10 @@ contract GameMoves is GameCore {
     }
 
     // --- Inlined Special Functions ---
-    function _execSeizeItem(address actor, address target) internal returns (uint8) {
+    function _execSeizeItem(
+        address actor,
+        address target
+    ) internal returns (uint8) {
         if (!playerData[target].hasJoined || target == actor) {
             revert InvalidTarget();
         }
@@ -505,7 +561,11 @@ contract GameMoves is GameCore {
         // Priority: EnchantedKey > Key > Staff
         uint8 itemType = playerData[target].enchantedKeys > 0
             ? ITEM_ENCHANTED_KEY
-            : playerData[target].keys > 0 ? ITEM_KEY : playerData[target].staffs > 0 ? ITEM_STAFF : 255;
+            : playerData[target].keys > 0
+            ? ITEM_KEY
+            : playerData[target].staffs > 0
+            ? ITEM_STAFF
+            : 255;
 
         if (itemType == 255) revert NoItems();
 
@@ -532,10 +592,22 @@ contract GameMoves is GameCore {
         return playerData[player].keys;
     }
 
-    function _selectRandomItem(uint8[] memory availableItems) internal view returns (uint8) {
+    function _selectRandomItem(
+        uint8[] memory availableItems
+    ) internal view returns (uint8) {
         require(availableItems.length > 0, "No items available");
-        uint256 randomIndex =
-            uint256(keccak256(abi.encodePacked(blockhash(block.number - 1), block.timestamp))) % availableItems.length;
+        uint256 randomIndex = uint256(
+            keccak256(
+                abi.encodePacked(blockhash(block.number - 1), block.timestamp)
+            )
+        ) % availableItems.length;
         return availableItems[randomIndex];
+    }
+
+    function getLastMoveTimestamp(
+        address player,
+        MoveType move
+    ) external view returns (uint256) {
+        return playerData[player].lastMoveTimestamp[uint256(move)];
     }
 }
