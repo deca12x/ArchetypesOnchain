@@ -23,12 +23,20 @@ contract GameMoveUnitTests is GameBaseTest {
 
         // Find the players with the required character types
         heroPlayer = findPlayerWithCharacter(GameCore.CharacterType.Hero);
-        explorerPlayer = findPlayerWithCharacter(GameCore.CharacterType.Explorer);
-        innocentPlayer = findPlayerWithCharacter(GameCore.CharacterType.Innocent);
+        explorerPlayer = findPlayerWithCharacter(
+            GameCore.CharacterType.Explorer
+        );
+        innocentPlayer = findPlayerWithCharacter(
+            GameCore.CharacterType.Innocent
+        );
         artistPlayer = findPlayerWithCharacter(GameCore.CharacterType.Artist);
         rulerPlayer = findPlayerWithCharacter(GameCore.CharacterType.Ruler);
-        caregiverPlayer = findPlayerWithCharacter(GameCore.CharacterType.Caregiver);
-        commonManPlayer = findPlayerWithCharacter(GameCore.CharacterType.CommonMan);
+        caregiverPlayer = findPlayerWithCharacter(
+            GameCore.CharacterType.Caregiver
+        );
+        commonManPlayer = findPlayerWithCharacter(
+            GameCore.CharacterType.CommonMan
+        );
         jokerPlayer = findPlayerWithCharacter(GameCore.CharacterType.Joker);
         wizardPlayer = findPlayerWithCharacter(GameCore.CharacterType.Wizard);
         outlawPlayer = findPlayerWithCharacter(GameCore.CharacterType.Outlaw);
@@ -53,7 +61,11 @@ contract GameMoveUnitTests is GameBaseTest {
         // Verify alliance is formed by checking if both players have the same root
         address heroRoot = game.getDsuParent(heroPlayer);
         address explorerRoot = game.getDsuParent(explorerPlayer);
-        assertEq(heroRoot, explorerRoot, "Hero and Explorer should be in the same alliance");
+        assertEq(
+            heroRoot,
+            explorerRoot,
+            "Hero and Explorer should be in the same alliance"
+        );
 
         // Step 2: 2 min later, attempt Inspire Alliance during cooldown
         vm.warp(block.timestamp + 2 * 60);
@@ -80,7 +92,11 @@ contract GameMoveUnitTests is GameBaseTest {
         // Verify alliance is formed by checking if both players have the same root
         heroRoot = game.getDsuParent(heroPlayer);
         explorerRoot = game.getDsuParent(explorerPlayer);
-        assertEq(heroRoot, explorerRoot, "Hero and Explorer should be in the same alliance after inactivity");
+        assertEq(
+            heroRoot,
+            explorerRoot,
+            "Hero and Explorer should be in the same alliance after inactivity"
+        );
     }
 
     function testDiscover() public {
@@ -127,5 +143,94 @@ contract GameMoveUnitTests is GameBaseTest {
         // Step 8: Innocent now has 1 object (log what object it is)
         uint8 innocentItem = game.getPlayerKeys(innocentPlayer);
         console.log("Innocent's item:", innocentItem);
+    }
+
+    function testPurify() public {
+        // Step 1: Verify initial chest state
+        assertEq(game.seals(), 1, "Chest should initially have 1 seal");
+
+        // Step 2: Innocent calls Purify move successfully
+        vm.prank(innocentPlayer);
+        GameMoves.MoveParams memory purifyParams = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.Purify,
+            actor: innocentPlayer,
+            targetPlayer: address(0),
+            useItem: false
+        });
+        game.executeMove(purifyParams);
+        assertEq(game.seals(), 0, "Chest should have 0 seals after Purify");
+
+        // Step 3: Wizard calls Arcane Seal successfully
+        vm.prank(wizardPlayer);
+        GameMoves.MoveParams memory arcaneSealParams = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.ArcaneSeal,
+            actor: wizardPlayer,
+            targetPlayer: address(0),
+            useItem: false
+        });
+        game.executeMove(arcaneSealParams);
+        assertEq(game.seals(), 1, "Chest should have 1 seal after Arcane Seal");
+
+        // Step 4: Innocent calls Purify move unsuccessfully due to cooldown
+        vm.warp(block.timestamp + 1 * 60);
+        vm.prank(innocentPlayer);
+        vm.recordLogs(); // Start recording logs
+        vm.expectRevert(GameCore.MoveOnCooldown.selector);
+        game.executeMove(purifyParams);
+
+        // Retrieve and log the recorded events
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint i = 0; i < logs.length; i++) {
+            if (
+                logs[i].topics[0] ==
+                keccak256(
+                    "CooldownCheck(address,MoveType,uint256,uint256,uint256)"
+                )
+            ) {
+                (
+                    address actor,
+                    GameCore.MoveType move,
+                    uint256 lastMoveTimestamp,
+                    uint256 cooldownDuration,
+                    uint256 currentTime
+                ) = abi.decode(
+                        logs[i].data,
+                        (address, GameCore.MoveType, uint256, uint256, uint256)
+                    );
+                console.log("CooldownCheck Event - Actor:", actor);
+                console.log("Move:", uint256(move));
+                console.log("Last Move Timestamp:", lastMoveTimestamp);
+                console.log("Cooldown Duration:", cooldownDuration);
+                console.log("Current Time:", currentTime);
+            }
+        }
+
+        // Step 5: Caregiver calls Plea of Peace
+        vm.warp(block.timestamp + 6 * 60);
+        vm.prank(caregiverPlayer);
+        GameMoves.MoveParams memory pleaOfPeaceParams = GameMoves.MoveParams({
+            moveType: GameCore.MoveType.PleaOfPeace,
+            actor: caregiverPlayer,
+            targetPlayer: address(0),
+            useItem: false
+        });
+        game.executeMove(pleaOfPeaceParams);
+
+        // Step 6: Wait 6 minutes, Innocent calls Purify move unsuccessfully due to Plea of Peace
+        vm.prank(innocentPlayer);
+        vm.expectRevert(GameCore.PeaceActive.selector);
+        game.executeMove(purifyParams);
+
+        // Step 7: Wait 6 more minutes, Innocent calls Purify move successfully
+        vm.warp(block.timestamp + 6 * 60);
+        vm.prank(innocentPlayer);
+        game.executeMove(purifyParams);
+        assertEq(game.seals(), 0, "Chest should have 0 seals after Purify");
+
+        // Step 8: Wait 6 more minutes, Innocent calls Purify move unsuccessfully because chest already has 0 seals
+        vm.warp(block.timestamp + 6 * 60);
+        vm.prank(innocentPlayer);
+        vm.expectRevert(GameCore.InvalidChestUnlockMove.selector);
+        game.executeMove(purifyParams);
     }
 }
